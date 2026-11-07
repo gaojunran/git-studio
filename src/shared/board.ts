@@ -44,9 +44,11 @@ export interface BoardItemDetail extends BoardItemSummary {
   comments: BoardComment[];
   base?: string | null;
   head?: string | null;
+  headSha?: string | null;
   additions?: number | null;
   deletions?: number | null;
   mergeable?: boolean | null;
+  mergeMethods?: string[];
   canComment: boolean;
   canClose: boolean;
   canReopen: boolean;

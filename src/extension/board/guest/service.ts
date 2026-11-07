@@ -176,6 +176,41 @@ export class GuestService {
     return answer.data;
   }
 
+  async mutate(
+    record: GuestRecord,
+    kind: string,
+    input: Record<string, unknown>,
+    context: Record<string, unknown>,
+    route: string
+  ): Promise<Record<string, unknown>> {
+    const resolved = await this.request(record, 'mutation.resolveTarget', { context, kind, input });
+    try {
+      const result = await this.request(record, 'mutation.perform', { route, kind, input, resolved });
+      return (result ?? {}) as Record<string, unknown>;
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      const definite = status !== undefined && status >= 400 && status < 500;
+      if (definite) {
+        throw error;
+      }
+      try {
+        const reconciled = (await this.request(record, 'mutation.reconcile', { route, kind, input, resolved })) as {
+          state?: string;
+          result?: Record<string, unknown>;
+        };
+        if (reconciled.state === 'succeeded') {
+          return reconciled.result ?? {};
+        }
+        if (reconciled.state === 'failed') {
+          throw error;
+        }
+      } catch {
+        // A reconcile that cannot answer leaves the original failure as the truth.
+      }
+      throw error;
+    }
+  }
+
   async stop(id: string): Promise<void> {
     const runtime = this.runtimes.get(id);
     this.runtimes.delete(id);

@@ -83,7 +83,7 @@ interface GitHubPull extends GitHubIssue {
   draft?: boolean;
   mergeable?: boolean | null;
   base?: { ref: string };
-  head?: { ref: string };
+  head?: { ref: string; sha?: string };
   additions?: number;
   deletions?: number;
   merged?: boolean;
@@ -378,9 +378,11 @@ export class GitHubProvider implements BoardProvider {
       })),
       base: pull.base?.ref ?? null,
       head: pull.head?.ref ?? null,
+      headSha: pull.head?.sha ?? null,
       additions: pull.additions ?? null,
       deletions: pull.deletions ?? null,
       mergeable: pull.mergeable ?? null,
+      mergeMethods: ['merge', 'squash', 'rebase'],
       canComment: true,
       canClose: pull.state === 'open' && !pull.merged,
       canReopen: pull.state === 'closed' && !pull.merged,

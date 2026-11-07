@@ -553,8 +553,18 @@ function DetailPane({
                 ) : null}
                 {detail.canMerge ? (
                   <>
-                    <button className="btn" disabled={busy} onClick={() => onMerge('merge')}>Merge</button>
-                    <button className="btn btn--accent" disabled={busy} onClick={() => onMerge('squash')}>Squash &amp; merge</button>
+                    {(detail.mergeMethods ?? ['merge', 'squash'])
+                      .filter((method): method is 'merge' | 'squash' | 'rebase' => method === 'merge' || method === 'squash' || method === 'rebase')
+                      .map((method) => (
+                        <button
+                          key={method}
+                          className={`btn${method === 'merge' ? '' : ' btn--accent'}`}
+                          disabled={busy}
+                          onClick={() => onMerge(method)}
+                        >
+                          {method === 'merge' ? 'Merge' : method === 'squash' ? 'Squash & merge' : 'Rebase & merge'}
+                        </button>
+                      ))}
                   </>
                 ) : null}
               </div>

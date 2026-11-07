@@ -53,6 +53,7 @@ interface ScChangeRequest extends Omit<ScIssue, 'state'> {
   draft: boolean;
   base: string;
   head: string;
+  headSha?: string;
   mergeable?: boolean | null;
   additions?: number;
   deletions?: number;
@@ -259,7 +260,27 @@ export class GuestProvider implements BoardProvider {
     };
   }
 
+  private capabilities() {
+    return this.record.descriptor.capabilities;
+  }
+
+  private mergeMethods(): string[] {
+    const merge = this.record.descriptor.capabilities.merge;
+    return merge && typeof merge === 'object' && Array.isArray(merge.methods) ? merge.methods : [];
+  }
+
+  private mutationContext(target: Record<string, unknown>): Record<string, unknown> {
+    return {
+      repositoryId: this.repo.root,
+      bindingRevision: 1,
+      primaryRemote: 'origin',
+      directory: this.repo.root,
+      target
+    };
+  }
+
   async detail(kind: BoardKind, number: number): Promise<BoardItemDetail> {
+    const capabilities = this.capabilities();
     if (kind === 'issue') {
       const issue = (await this.call('getIssue', { number })) as ScIssue;
       const comments = (await this.call('issueComments', { number })) as ScComment[];
@@ -268,9 +289,9 @@ export class GuestProvider implements BoardProvider {
         commentCount: comments.length,
         body: issue.body ?? '',
         comments: comments.map((comment) => this.commentOf(comment)),
-        canComment: false,
-        canClose: false,
-        canReopen: false,
+        canComment: capabilities.comments === true,
+        canClose: capabilities.state === true && issue.state === 'open',
+        canReopen: capabilities.state === true && issue.state === 'closed',
         canMerge: false,
         canAnswer: false
       };
@@ -285,34 +306,59 @@ export class GuestProvider implements BoardProvider {
     if (!context.changeRequest) {
       throw new Error(`Change request #${number} not found`);
     }
+    const pull = context.changeRequest;
     const comments = context.issueComments ?? [];
+    const methods = this.mergeMethods();
     return {
-      ...this.pullSummary(context.changeRequest),
+      ...this.pullSummary(pull),
       commentCount: comments.length,
-      body: context.changeRequest.body ?? '',
+      body: pull.body ?? '',
       comments: comments.map((comment) => this.commentOf(comment)),
-      base: context.changeRequest.base,
-      head: context.changeRequest.head,
-      additions: context.changeRequest.additions ?? null,
-      deletions: context.changeRequest.deletions ?? null,
-      mergeable: context.changeRequest.mergeable ?? null,
-      canComment: false,
-      canClose: false,
-      canReopen: false,
-      canMerge: false,
+      base: pull.base,
+      head: pull.head,
+      headSha: pull.headSha ?? null,
+      additions: pull.additions ?? null,
+      deletions: pull.deletions ?? null,
+      mergeable: pull.mergeable ?? null,
+      mergeMethods: methods,
+      canComment: capabilities.comments === true,
+      canClose: capabilities.state === true && pull.state === 'open',
+      canReopen: capabilities.state === true && pull.state === 'closed',
+      canMerge: methods.length > 0 && pull.state === 'open' && pull.draft !== true,
       canAnswer: false
     };
   }
 
-  async comment(): Promise<void> {
-    throw new Error('Writing through an integration provider is not available yet.');
+  async comment(kind: BoardKind, number: number, body: string): Promise<void> {
+    const issue = kind === 'issue';
+    await this.service.mutate(
+      this.record,
+      issue ? 'issue-comment' : 'change-request-comment',
+      { body },
+      this.mutationContext({ number }),
+      issue ? '/issues/comment' : '/pr/comment'
+    );
   }
 
-  async setState(): Promise<void> {
-    throw new Error('Writing through an integration provider is not available yet.');
+  async setState(kind: BoardKind, number: number, state: 'open' | 'closed'): Promise<void> {
+    const issue = kind === 'issue';
+    await this.service.mutate(
+      this.record,
+      issue ? 'issue-state' : 'change-request-state',
+      { state },
+      this.mutationContext({ number }),
+      issue ? '/issues/state' : '/pr/state'
+    );
   }
 
-  async merge(): Promise<void> {
-    throw new Error('Writing through an integration provider is not available yet.');
+  async merge(number: number, method: 'merge' | 'squash' | 'rebase'): Promise<void> {
+    const detail = await this.detail('pull', number);
+    await this.service.mutate(
+      this.record,
+      'change-request-merge',
+      { method },
+      this.mutationContext({ number, head: detail.head, base: detail.base, headSha: detail.headSha }),
+      '/pr/merge'
+    );
   }
 }

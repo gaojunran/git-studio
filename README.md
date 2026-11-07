@@ -115,9 +115,9 @@ other hosts come from OpenChamber source-control integration packages.
   callback with a per-call handle.
 
 Integration packages are installed from a folder with **Git Studio: Install Integration Extension…**.
-The first version supports the `source-control` role's reads (issues, change requests, comments and
-context); writes through an integration are not wired yet. Tracker packages, chat-session actions
-and worktree creation are out of scope for this version.
+The first version supports the `source-control` role's reads and its comment, state and merge writes;
+review, labels, reviewers, tracker packages, chat-session actions and worktree creation are out of
+scope for this version.
 
 ## Settings
 
