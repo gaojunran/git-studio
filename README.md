@@ -20,6 +20,8 @@ place to learn and one source of truth for repository state.
 - Compare the working tree with any branch, tag or commit using three-dot semantics (merge base to
   working tree), so commits unique to the other side never show up. The working-tree side of the diff
   is a real file URI, so it stays editable; untracked files are included as additions.
+- Two-ref diffs come in both flavours: `Compare Two Refs` (two-dot, full trees) and
+  `Compare Two Refs with Merge Base` (three-dot, right side since divergence).
 - More diff commands: two refs, merge-base, stash, one file at two revisions, a folder, and unpushed commits.
 - Detached HEAD (jj workflows) is handled: the merge-base command resolves the only branch containing
   HEAD, and asks when several branches match instead of failing.
@@ -46,8 +48,9 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Open Commit in History` | Reveal a commit in the history panel. |
 | `Git Studio: Go to Commit…` | Jump to a hash, branch or tag. |
 | `Git Studio: Undo Last Rewrite` | Reset back to the state recorded before the last rewrite. |
-| `Git Studio: Compare Working Tree with…` | Diff a ref against the working tree from their merge base (three-dot). The working-tree side stays editable. |
-| `Git Studio: Compare Two Refs…` | Diff any two branches, tags or commits. |
+| `Git Studio: Compare Working Tree with Merge Base…` | Diff a ref against the working tree from their merge base (three-dot). The working-tree side stays editable. |
+| `Git Studio: Compare Two Refs…` | Diff any two branches, tags or commits (two-dot, full trees). |
+| `Git Studio: Compare Two Refs with Merge Base…` | Diff any two refs from their merge base (three-dot); only changes on the right side appear. |
 | `Git Studio: Compare Current Branch with Merge Base…` | Show only the changes made on the current branch since it diverged. In detached HEAD it uses the only branch containing HEAD, otherwise asks which branch (or HEAD itself) to use. |
 | `Git Studio: Compare Stash…` | Diff a stash against its parent commit. |
 | `Git Studio: Compare File at Two Revisions…` | Diff one file between any two revisions. |

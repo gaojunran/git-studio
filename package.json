@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -65,12 +65,18 @@
       },
       {
         "command": "gitStudio.compareWorkingTree",
-        "title": "Compare Working Tree with…",
+        "title": "Compare Working Tree with Merge Base…",
         "category": "Git Studio"
       },
       {
         "command": "gitStudio.diffRefs",
         "title": "Compare Two Refs…",
+        "category": "Git Studio",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitStudio.diffRefsMergeBase",
+        "title": "Compare Two Refs with Merge Base…",
         "category": "Git Studio",
         "icon": "$(git-compare)"
       },
@@ -139,9 +145,14 @@
           "group": "1_compare@3"
         },
         {
-          "command": "gitStudio.diffMergeBase",
+          "command": "gitStudio.diffRefsMergeBase",
           "when": "scmProvider == git",
           "group": "1_compare@4"
+        },
+        {
+          "command": "gitStudio.diffMergeBase",
+          "when": "scmProvider == git",
+          "group": "1_compare@5"
         }
       ],
       "scm/resourceState/context": [

@@ -8,6 +8,7 @@ import {
   compareFolder,
   compareMergeBase,
   compareRefs,
+  compareRefsMergeBase,
   compareStash,
   compareUnpushed
 } from './features/diffs';
@@ -167,6 +168,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('gitStudio.diffRefs', async (arg?: unknown) => {
       const { uri, options } = splitCompareArg(arg);
       await compareRefs(services, uri, options.left, options.right);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffRefsMergeBase', async (arg?: unknown) => {
+      const { uri, options } = splitCompareArg(arg);
+      await compareRefsMergeBase(services, uri, options.left, options.right);
     }),
 
     vscode.commands.registerCommand('gitStudio.diffMergeBase', async (arg?: unknown) => {

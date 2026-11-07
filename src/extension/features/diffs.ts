@@ -124,6 +124,47 @@ async function resolveCurrentBranch(services: Services, repo: RepoHandle): Promi
     : { ref: picked.value, label: `${shortRef(picked.value)} (detached)`, detached: true };
 }
 
+export async function compareRefsMergeBase(
+  services: Services,
+  uri?: vscode.Uri,
+  leftOverride?: string,
+  rightOverride?: string
+): Promise<void> {
+  const repo = await repoFor(services, uri);
+  if (!repo) {
+    return;
+  }
+
+  const left = leftOverride ?? await pickRef(services, repo, { placeHolder: 'Base ref…' });
+  if (!left) {
+    return;
+  }
+  const right = rightOverride ?? await pickRef(services, repo, { placeHolder: `Compare ${shortRef(left)} with…` });
+  if (!right) {
+    return;
+  }
+  if (left === right) {
+    void vscode.window.showInformationMessage('Git Studio: pick two different refs.');
+    return;
+  }
+
+  const base = await mergeBaseOf(services, repo, left, right);
+  if (!base) {
+    void vscode.window.showInformationMessage(
+      `Git Studio: ${shortRef(left)} and ${shortRef(right)} have no common ancestor.`
+    );
+    return;
+  }
+
+  await openRefDiff(
+    services,
+    repo,
+    base,
+    right,
+    `Changes on ${shortRef(right)} since merge-base(${shortRef(left)})`
+  );
+}
+
 export async function compareMergeBase(
   services: Services,
   uri?: vscode.Uri,
