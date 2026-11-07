@@ -1,6 +1,11 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import type { RebasePlan } from '../../shared/protocol';
 import { GitError, type GitRunner } from './cli';
+import { buildRebasePlan, buildTodo, shellQuote, validatePlan } from './rebase';
+import { headOid, resolveCommit } from './revision';
+
+export { headOid, resolveCommit } from './revision';
 
 export type Operation = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | null;
 
@@ -24,22 +29,6 @@ export async function detectOperation(runner: GitRunner, cwd: string): Promise<O
     }
   }
   return null;
-}
-
-export async function headOid(runner: GitRunner, cwd: string): Promise<string | undefined> {
-  try {
-    return (await runner.run(['rev-parse', '--verify', 'HEAD'], cwd)).trim();
-  } catch {
-    return undefined;
-  }
-}
-
-export async function resolveCommit(runner: GitRunner, cwd: string, revision: string): Promise<string> {
-  const oid = (await runner.run(['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`], cwd)).trim();
-  if (!oid) {
-    throw new Error(`Unknown revision: ${revision}`);
-  }
-  return oid;
 }
 
 export function isConflict(error: unknown): boolean {
@@ -114,7 +103,100 @@ export class WriteCoordinator {
         throw new Error('No operation to abort.');
       }
       await this.runner.run(ABORT_ARGS[operation], cwd);
+      await this.cleanupRebaseDir(cwd);
     });
+  }
+
+  async rebase(cwd: string, plan: RebasePlan, expectedHead: string | undefined): Promise<'done' | 'stopped'> {
+    return this.run(cwd, expectedHead, async () => {
+      const fresh = await buildRebasePlan(this.runner, cwd, plan.target);
+      if (fresh.error) {
+        throw new Error(fresh.error);
+      }
+      const allowed = new Set(fresh.items.map((item) => item.hash));
+      if (plan.items.some((item) => !allowed.has(item.hash))) {
+        throw new Error('The commit list changed. Reopen the rebase dialog.');
+      }
+      const invalid = validatePlan(plan);
+      if (invalid) {
+        throw new Error(invalid);
+      }
+
+      const dir = path.join(await gitDir(this.runner, cwd), 'gitstudio-rebase');
+      mkdirSync(dir, { recursive: true });
+      const todoPath = path.join(dir, 'todo');
+      writeFileSync(todoPath, buildTodo(plan, dir), 'utf8');
+
+      try {
+        await this.runner.run(['rebase', '-i', plan.target], cwd, {
+          env: {
+            GIT_SEQUENCE_EDITOR: `cp ${shellQuote(todoPath)}`,
+            GIT_EDITOR: 'true'
+          }
+        });
+        const operation = await detectOperation(this.runner, cwd).catch(() => null);
+        if (operation === 'rebase') {
+          return 'stopped' as const;
+        }
+        await this.cleanupRebaseDir(cwd);
+        return 'done' as const;
+      } catch (error) {
+        const operation = await detectOperation(this.runner, cwd).catch(() => null);
+        if (operation !== 'rebase') {
+          await this.cleanupRebaseDir(cwd);
+        }
+        throw error;
+      }
+    });
+  }
+
+  async continueOperation(cwd: string): Promise<'done' | 'stopped'> {
+    return this.exclusive(async () => {
+      const operation = await detectOperation(this.runner, cwd);
+      if (!operation) {
+        throw new Error('No operation to continue.');
+      }
+      if (operation === 'merge') {
+        throw new Error('Resolve the merge and commit it instead.');
+      }
+      await this.runner.run(operation === 'rebase' ? ['rebase', '--continue'] : [operation, '--continue'], cwd, {
+        env: { GIT_EDITOR: 'true' }
+      });
+      const remaining = await detectOperation(this.runner, cwd).catch(() => null);
+      if (remaining === 'rebase') {
+        return 'stopped' as const;
+      }
+      await this.cleanupRebaseDir(cwd);
+      return 'done' as const;
+    });
+  }
+
+  async skipOperation(cwd: string): Promise<'done' | 'stopped'> {
+    return this.exclusive(async () => {
+      const operation = await detectOperation(this.runner, cwd);
+      if (!operation) {
+        throw new Error('No operation to skip.');
+      }
+      if (operation === 'merge') {
+        throw new Error('Resolve the merge and commit it instead.');
+      }
+      await this.runner.run(operation === 'rebase' ? ['rebase', '--skip'] : [operation, '--skip'], cwd);
+      const remaining = await detectOperation(this.runner, cwd).catch(() => null);
+      if (remaining === 'rebase') {
+        return 'stopped' as const;
+      }
+      await this.cleanupRebaseDir(cwd);
+      return 'done' as const;
+    });
+  }
+
+  private async cleanupRebaseDir(cwd: string): Promise<void> {
+    try {
+      const dir = path.join(await gitDir(this.runner, cwd), 'gitstudio-rebase');
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // Best effort: a missing directory or git dir is not an error.
+    }
   }
 
   private exclusive<T>(task: () => Promise<T>): Promise<T> {

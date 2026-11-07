@@ -3,6 +3,7 @@ import { GitRunner } from './git/cli';
 import { WriteCoordinator } from './git/write';
 import { AnnotateController } from './features/annotate';
 import { HistoryPanel } from './host/historyPanel';
+import { Journal } from './host/journal';
 import { RepoService } from './host/repoService';
 import type { Services } from './host/services';
 
@@ -30,10 +31,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const runner = new GitRunner(repoService.gitPath, (line) => output.debug(line));
   const writes = new WriteCoordinator(runner);
+  const journal = new Journal(context.workspaceState);
   const services: Services = {
     repoService,
     runner,
     writes,
+    journal,
     output,
     extensionUri: context.extensionUri
   };
@@ -122,6 +125,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch {
         void vscode.window.showErrorMessage(`Git Studio: unknown revision "${revision}".`);
       }
+    }),
+
+    vscode.commands.registerCommand('gitStudio.undoLastRewrite', async () => {
+      await HistoryPanel.undoCurrent();
     }),
 
     vscode.commands.registerCommand('gitStudio.refresh', async () => {

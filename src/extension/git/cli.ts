@@ -4,6 +4,7 @@ export interface GitRunOptions {
   signal?: AbortSignal;
   input?: string;
   maxBuffer?: number;
+  env?: Record<string, string>;
 }
 
 export class GitError extends Error {
@@ -103,7 +104,8 @@ export class GitRunner {
           GIT_OPTIONAL_LOCKS: '0',
           GIT_PAGER: 'cat',
           GIT_TERMINAL_PROMPT: '0',
-          LC_ALL: 'C'
+          LC_ALL: 'C',
+          ...options.env
         }
       });
 

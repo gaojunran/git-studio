@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Filters, RefInfo, RepoSummary } from '../../shared/protocol';
+import type { Filters, RefInfo, RepoSummary, UndoInfo } from '../../shared/protocol';
 
 interface Props {
   repo: RepoSummary;
@@ -10,6 +10,8 @@ interface Props {
   onPickRepo: () => void;
   onPickRefs: () => void;
   onRefresh: () => void;
+  onUndo: () => void;
+  undo: UndoInfo | null;
   onOpenSettings: () => void;
 }
 
@@ -76,6 +78,15 @@ export function Toolbar(props: Props) {
         <button className="btn btn--icon" onClick={props.onRefresh} title="Refresh">
           ⟳
         </button>
+        {props.undo && (
+          <button
+            className="btn"
+            onClick={props.onUndo}
+            title={`Undo ${props.undo.label} — reset ${props.undo.branch ?? 'HEAD'} to ${props.undo.before.slice(0, 7)}`}
+          >
+            ↶ Undo
+          </button>
+        )}
         <button className="btn btn--icon" onClick={props.onOpenSettings} title="Settings">
           ⚙
         </button>

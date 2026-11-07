@@ -5,12 +5,15 @@ import type {
   Filters,
   GraphRow,
   HostMessage,
-  InitState
+  InitState,
+  RebasePlan,
+  UndoInfo
 } from '../shared/protocol';
 import { getState, post, setState } from './vscode';
 import { Toolbar } from './components/Toolbar';
 import { CommitList } from './components/CommitList';
 import { DetailPane } from './components/DetailPane';
+import { RebaseDialog } from './components/RebaseDialog';
 
 interface PersistedState {
   root: string;
@@ -24,6 +27,8 @@ export function App() {
   const [graph, setGraph] = useState<GraphRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [operation, setOperation] = useState<string | null>(null);
+  const [undo, setUndo] = useState<UndoInfo | null>(null);
+  const [rebasePlan, setRebasePlan] = useState<RebasePlan | null>(null);
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +84,7 @@ export function App() {
         case 'init': {
           setInit(message.state);
           setOperation(message.state.operation);
+          setUndo(message.state.undo);
           pageSizeRef.current = message.state.pageSize;
           const persisted = getState<PersistedState>();
           const usable = !initializedRef.current && persisted && persisted.root === message.state.repo.root
@@ -139,6 +145,12 @@ export function App() {
         }
         case 'operation':
           setOperation(message.operation);
+          break;
+        case 'undo':
+          setUndo(message.undo);
+          break;
+        case 'rebasePlan':
+          setRebasePlan(message.plan);
           break;
         case 'error': {
           setError(message.message);
@@ -242,6 +254,8 @@ export function App() {
         onPickRepo={() => post({ type: 'pickerRepo' })}
         onPickRefs={() => post({ type: 'pickerRefs' })}
         onRefresh={() => post({ type: 'refresh' })}
+        onUndo={() => post({ type: 'undoLastRewrite' })}
+        undo={undo}
         onOpenSettings={() => post({ type: 'openSettings' })}
       />
 
@@ -273,6 +287,16 @@ export function App() {
           <button className="btn btn--small" onClick={() => post({ type: 'abortOperation' })}>
             Abort {operation}
           </button>
+          {operation !== 'merge' && (
+            <>
+              <button className="btn btn--small" onClick={() => post({ type: 'continueOperation' })}>
+                Continue
+              </button>
+              <button className="btn btn--small" onClick={() => post({ type: 'skipOperation' })}>
+                Skip
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -316,6 +340,14 @@ export function App() {
           onCopy={(text) => post({ type: 'copy', text })}
         />
       </div>
+      <RebaseDialog
+        plan={rebasePlan}
+        onClose={() => setRebasePlan(null)}
+        onStart={(plan) => {
+          post({ type: 'startRebase', plan });
+          setRebasePlan(null);
+        }}
+      />
     </div>
   );
 }

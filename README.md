@@ -21,7 +21,11 @@ place to learn and one source of truth for repository state.
   create branch here, create tag here, checkout (detached), compare with working tree,
   open on GitHub/GitLab/Bitbucket, copy subject or hash.
 - History rewriting: reset (soft/mixed/hard), revert and cherry-pick from the same menu.
-  Merge commits use parent 1. Conflicts surface in a banner with an Abort action.
+  Merge commits use parent 1. Conflicts surface in a banner with Abort action.
+- Interactive rebase from any ancestor commit: reorder, pick, reword, edit, squash, fixup, drop.
+  Merge commits are flattened. The rebase stops for `edit`/conflicts with Continue, Skip and Abort.
+- Undo the last Git Studio rewrite from the toolbar. The journal keeps 20 entries per repository
+  and is only offered while HEAD still matches the recorded result.
 - Write safety: operations are serialized, the target commit is re-resolved, and HEAD is
   rechecked after confirmation; a merge/rebase/cherry-pick/revert in progress blocks new writes.
 
@@ -35,6 +39,7 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Toggle File Annotate` | Toggle annotations for the active editor. |
 | `Git Studio: Open Commit in History` | Reveal a commit in the history panel. |
 | `Git Studio: Go to Commit…` | Jump to a hash, branch or tag. |
+| `Git Studio: Undo Last Rewrite` | Reset back to the state recorded before the last rewrite. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
 
 ## Settings
@@ -66,10 +71,10 @@ Press `F5` in VS Code to launch an Extension Development Host.
 
 ```
 src/shared/protocol.ts     host <-> webview message contract
-src/extension/git/         git process runner, log/refs/diff/blame/commit/remote/write
+src/extension/git/         git process runner, log/refs/diff/blame/commit/remote/write/rebase
 src/extension/graph/       pure lane layout for the commit graph
 src/extension/history/     default ref selection for complex repositories
-src/extension/host/        repository service, history panel, commit actions, webview HTML
+src/extension/host/        repository service, history panel, commit actions, journal, webview HTML
 src/extension/features/    blame decorations
 src/webview/               React history UI (virtual list + SVG graph)
 ```
@@ -95,7 +100,7 @@ graph at a handful of lanes instead of dozens.
 
 ## Limitations
 
-- No interactive rebase, commit message editing or squash yet.
+- Merge commits are flattened during interactive rebase.
 - Merge commit file lists use the selected parent's diff; rename detection is on.
 - `all` mode can be slow and wide on repositories with hundreds of refs; `primary` is the default for that reason.
 - The built-in Git extension must be enabled for repository discovery.

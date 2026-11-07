@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import type { CommitDetail } from '../../shared/protocol';
+import type { CommitDetail, RebasePlan } from '../../shared/protocol';
 import { loadWorktreeFiles } from '../git/diff';
+import { buildRebasePlan } from '../git/rebase';
 import { commitUrl, pickRemoteUrl } from '../git/remote';
 import { detectOperation, headOid, isConflict, type Operation } from '../git/write';
 import type { RepoHandle } from './repoService';
@@ -18,6 +19,7 @@ type ActionId =
   | 'reset'
   | 'revert'
   | 'cherry-pick'
+  | 'rebase'
   | 'abort';
 
 interface ActionItem extends vscode.QuickPickItem {
@@ -38,7 +40,8 @@ export class CommitActionRunner {
   constructor(
     private readonly services: Services,
     private readonly getRepo: () => RepoHandle,
-    private readonly onChanged: () => Promise<void>
+    private readonly onChanged: () => Promise<void>,
+    private readonly onRebasePlan: (plan: RebasePlan) => void
   ) {}
 
   async show(hash: string, detail: CommitDetail | undefined): Promise<void> {
@@ -52,7 +55,8 @@ export class CommitActionRunner {
       { kind: vscode.QuickPickItemKind.Separator, label: 'Rewrite' },
       { id: 'reset', label: '$(discard) Reset Current Branch to Here…' },
       { id: 'revert', label: '$(history) Revert Commit…' },
-      { id: 'cherry-pick', label: '$(git-commit) Cherry-pick onto Current Branch…' }
+      { id: 'cherry-pick', label: '$(git-commit) Cherry-pick onto Current Branch…' },
+      { id: 'rebase', label: '$(git-pull-request) Interactively Rebase from Here…' }
     ];
 
     if (operation) {
@@ -118,6 +122,9 @@ export class CommitActionRunner {
           break;
         case 'cherry-pick':
           await this.cherryPick(hash, detail);
+          break;
+        case 'rebase':
+          await this.openRebase(hash);
           break;
         case 'abort':
           await this.abort();
@@ -254,6 +261,7 @@ export class CommitActionRunner {
     }
 
     await this.services.writes.reset(repo.root, hash, mode.value, head);
+    await this.record(`reset (${mode.value})`, head);
     await this.onChanged();
     void vscode.window.showInformationMessage(`Git Studio: reset ${branch} to ${shortHash(hash)} (${mode.value}).`);
   }
@@ -271,6 +279,7 @@ export class CommitActionRunner {
     }
 
     await this.services.writes.revert(repo.root, hash, head, mainlineOf(detail));
+    await this.record(`revert ${shortHash(hash)}`, head);
     await this.onChanged();
     void vscode.window.showInformationMessage(`Git Studio: reverted ${shortHash(hash)}.`);
   }
@@ -289,6 +298,7 @@ export class CommitActionRunner {
     }
 
     await this.services.writes.cherryPick(repo.root, hash, head, mainlineOf(detail));
+    await this.record(`cherry-pick ${shortHash(hash)}`, head);
     await this.onChanged();
     void vscode.window.showInformationMessage(`Git Studio: cherry-picked ${shortHash(hash)} onto ${branch}.`);
   }
@@ -312,6 +322,30 @@ export class CommitActionRunner {
     await this.services.writes.abort(repo.root);
     await this.onChanged();
     void vscode.window.showInformationMessage(`Git Studio: aborted ${operation}.`);
+  }
+
+  private async openRebase(hash: string): Promise<void> {
+    const repo = this.getRepo();
+    const plan = await buildRebasePlan(this.services.runner, repo.root, hash);
+    this.onRebasePlan(plan);
+  }
+
+  private async record(label: string, before: string | undefined): Promise<void> {
+    if (!before) {
+      return;
+    }
+    const repo = this.getRepo();
+    const after = await headOid(this.services.runner, repo.root);
+    if (!after || after === before) {
+      return;
+    }
+    await this.services.journal.record(repo.root, {
+      label,
+      before,
+      after,
+      branch: repo.repo.state.HEAD?.name ?? null,
+      at: Date.now()
+    });
   }
 
   private async reportConflict(error: unknown): Promise<void> {

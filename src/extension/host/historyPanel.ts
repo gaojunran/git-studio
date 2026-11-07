@@ -7,6 +7,7 @@ import type {
   Filters,
   GraphRow,
   HostMessage,
+  RebasePlan,
   RefInfo,
   WebviewMessage
 } from '../../shared/protocol';
@@ -14,7 +15,7 @@ import { loadCommitDetail } from '../git/commit';
 import { loadDiffFiles } from '../git/diff';
 import { loadCommits, type LogQuery } from '../git/log';
 import { loadRefs } from '../git/refs';
-import { detectOperation } from '../git/write';
+import { detectOperation, headOid, isConflict } from '../git/write';
 import { selectDefaultRefs, type DefaultRefMode } from '../history/defaultRefs';
 import { layoutGraph } from '../graph/layout';
 import { CommitActionRunner } from './actions';
@@ -88,6 +89,7 @@ export class HistoryPanel {
   private abort: AbortController | undefined;
   private ready = false;
   private pendingFocus: string | undefined;
+  private pendingRebase: { head: string; label: string; branch: string | null } | undefined;
   private details = new Map<string, CommitDetail>();
   private readonly parentIndex = new Map<string, number>();
   private readonly actions: CommitActionRunner;
@@ -138,7 +140,12 @@ export class HistoryPanel {
       this.filters.path = this.filePath;
     }
     this.pendingFocus = options.focus;
-    this.actions = new CommitActionRunner(services, () => this.repo, () => this.afterWrite());
+    this.actions = new CommitActionRunner(
+      services,
+      () => this.repo,
+      () => this.afterWrite(),
+      (plan) => this.post({ type: 'rebasePlan', plan })
+    );
     this.bindRepo();
 
     this.panel.webview.html = renderHtml(panel.webview, services.extensionUri);
@@ -236,6 +243,18 @@ export class HistoryPanel {
         case 'abortOperation':
           await this.abortOperation();
           break;
+        case 'continueOperation':
+          await this.continueOperation();
+          break;
+        case 'skipOperation':
+          await this.skipOperation();
+          break;
+        case 'undoLastRewrite':
+          await this.undoLastRewrite();
+          break;
+        case 'startRebase':
+          await this.startRebase(message.plan);
+          break;
         case 'compare':
           await this.compare(message.a, message.b);
           break;
@@ -277,6 +296,11 @@ export class HistoryPanel {
 
     const pageSize = vscode.workspace.getConfiguration('gitStudio').get<number>('history.pageSize', PAGE_SIZE);
     const operation = await detectOperation(this.services.runner, this.repo.root).catch(() => null);
+    const head = await headOid(this.services.runner, this.repo.root);
+    const last = this.services.journal.last(this.repo.root);
+    const undo = last && head && last.after === head
+      ? { label: last.label, before: last.before, after: last.after, branch: last.branch }
+      : null;
     if (!this.refsInitialized || this.refsSource === 'default') {
       this.filters.refs = this.defaultRefs();
       this.refsInitialized = true;
@@ -293,7 +317,8 @@ export class HistoryPanel {
         filters: this.filters,
         filePath: this.filePath ?? null,
         pageSize: Math.max(50, Math.min(5000, pageSize)),
-        operation
+        operation,
+        undo
       }
     });
   }
@@ -673,7 +698,128 @@ export class HistoryPanel {
     }
 
     await this.services.writes.abort(this.repo.root);
+    this.pendingRebase = undefined;
     await this.afterWrite();
+  }
+
+  private async continueOperation(): Promise<void> {
+    try {
+      const result = await this.services.writes.continueOperation(this.repo.root);
+      if (result === 'done') {
+        await this.recordPendingRebase();
+      }
+      await this.afterWrite();
+      if (result === 'stopped') {
+        this.post({ type: 'error', message: 'Rebase stopped again. Amend or resolve, then Continue.' });
+      }
+    } catch (error) {
+      await this.afterWrite();
+      if (isConflict(error)) {
+        this.post({ type: 'error', message: 'Still conflicted. Resolve the files in Source Control, then Continue again.' });
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async skipOperation(): Promise<void> {
+    try {
+      const result = await this.services.writes.skipOperation(this.repo.root);
+      if (result === 'done') {
+        await this.recordPendingRebase();
+      }
+      await this.afterWrite();
+      if (result === 'stopped') {
+        this.post({ type: 'error', message: 'Rebase stopped again. Amend or resolve, then Continue.' });
+      }
+    } catch (error) {
+      await this.afterWrite();
+      if (isConflict(error)) {
+        this.post({ type: 'error', message: 'Still conflicted. Resolve the files in Source Control, then Skip or Abort.' });
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async startRebase(plan: RebasePlan): Promise<void> {
+    if (plan.error) {
+      return;
+    }
+
+    this.pendingRebase = { head: plan.head, label: `rebase ${plan.items.length} commits`, branch: plan.branch };
+    try {
+      const result = await this.services.writes.rebase(this.repo.root, plan, plan.head);
+      if (result === 'done') {
+        await this.recordPendingRebase();
+        await this.afterWrite();
+        void vscode.window.showInformationMessage(`Git Studio: rebased ${plan.items.length} commits.`);
+      } else {
+        await this.afterWrite();
+        void vscode.window.showInformationMessage('Git Studio: rebase stopped for edit. Amend the commit, then Continue or Skip.');
+      }
+    } catch (error) {
+      await this.afterWrite();
+      if (isConflict(error)) {
+        this.post({ type: 'error', message: 'Rebase stopped with conflicts. Resolve them in Source Control, then Continue or Abort.' });
+        return;
+      }
+      const operation = await detectOperation(this.services.runner, this.repo.root).catch(() => null);
+      if (operation !== 'rebase') {
+        this.pendingRebase = undefined;
+      }
+      throw error;
+    }
+  }
+
+  private async recordPendingRebase(): Promise<void> {
+    const pending = this.pendingRebase;
+    this.pendingRebase = undefined;
+    if (!pending) {
+      return;
+    }
+    const after = await headOid(this.services.runner, this.repo.root);
+    if (!after || after === pending.head) {
+      return;
+    }
+    await this.services.journal.record(this.repo.root, {
+      label: pending.label,
+      before: pending.head,
+      after,
+      branch: pending.branch,
+      at: Date.now()
+    });
+  }
+
+  private async undoLastRewrite(): Promise<void> {
+    const entry = this.services.journal.last(this.repo.root);
+    if (!entry) {
+      this.post({ type: 'undo', undo: null });
+      return;
+    }
+
+    const head = await headOid(this.services.runner, this.repo.root);
+    if (!head || head !== entry.after) {
+      void vscode.window.showWarningMessage(
+        'Git Studio: history changed since the last rewrite, so it cannot be undone safely. Refresh first.'
+      );
+      await this.afterWrite();
+      return;
+    }
+
+    const answer = await vscode.window.showWarningMessage(
+      `Undo ${entry.label}? ${entry.branch ?? 'HEAD'} will be reset to ${entry.before.slice(0, 7)} and tracked working tree changes will be discarded.`,
+      { modal: true },
+      'Undo'
+    );
+    if (answer !== 'Undo') {
+      return;
+    }
+
+    await this.services.writes.reset(this.repo.root, entry.before, 'hard', head);
+    await this.services.journal.pop(this.repo.root);
+    await this.afterWrite();
+    void vscode.window.showInformationMessage(`Git Studio: undid ${entry.label}.`);
   }
 
   private async afterWrite(): Promise<void> {
@@ -687,6 +833,10 @@ export class HistoryPanel {
 
   static async refreshCurrent(): Promise<void> {
     await HistoryPanel.current?.refresh();
+  }
+
+  static async undoCurrent(): Promise<void> {
+    await HistoryPanel.current?.undoLastRewrite();
   }
 
   async refresh(): Promise<void> {

@@ -94,6 +94,33 @@ export interface RepoSummary {
   detached: boolean;
 }
 
+export type RebaseAction = 'pick' | 'reword' | 'edit' | 'squash' | 'fixup' | 'drop';
+
+export interface RebaseItem {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  action: RebaseAction;
+  /** Replacement message for reword. */
+  message?: string;
+}
+
+export interface RebasePlan {
+  head: string;
+  target: string;
+  targetShort: string;
+  branch: string | null;
+  items: RebaseItem[];
+  error?: string;
+}
+
+export interface UndoInfo {
+  label: string;
+  before: string;
+  after: string;
+  branch: string | null;
+}
+
 export interface InitState {
   repo: RepoSummary;
   repos: RepoSummary[];
@@ -103,6 +130,7 @@ export interface InitState {
   pageSize: number;
   /** Merge, rebase, cherry-pick or revert currently in progress. */
   operation: string | null;
+  undo: UndoInfo | null;
 }
 
 export interface CommitQuery {
@@ -118,6 +146,8 @@ export type HostMessage =
   | { type: 'filters'; filters: Filters }
   | { type: 'focusCommit'; hash: string }
   | { type: 'operation'; operation: string | null }
+  | { type: 'rebasePlan'; plan: RebasePlan }
+  | { type: 'undo'; undo: UndoInfo | null }
   | { type: 'busy'; busy: boolean }
   | { type: 'error'; requestId?: number; message: string };
 
@@ -129,6 +159,11 @@ export type WebviewMessage =
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'commitActions'; hash: string }
   | { type: 'abortOperation' }
+  | { type: 'continueOperation' }
+  | { type: 'skipOperation' }
+  | { type: 'undoLastRewrite' }
+  | { type: 'rebasePlan'; hash: string }
+  | { type: 'startRebase'; plan: RebasePlan }
   | { type: 'compare'; a: string; b: string }
   | { type: 'openFileHistory'; path: string; hash: string }
   | { type: 'openFileAtRevision'; hash: string; path: string }
