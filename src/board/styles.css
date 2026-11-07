@@ -402,9 +402,62 @@ svg {
   font-size: 11.5px;
 }
 
+.list-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 230px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--fg-soft);
+  font-size: 12.5px;
+  transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.list-trigger:hover {
+  border-color: var(--border-strong);
+  background: #1b1817;
+  color: var(--fg);
+}
+
+.list-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.list-trigger__icon,
+.list-trigger__chevron {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+  flex: none;
+}
+
+.list-trigger__chevron {
+  margin-left: auto;
+  transition: transform 150ms ease;
+}
+
+.list-trigger[aria-expanded='true'] .list-trigger__chevron {
+  transform: rotate(180deg);
+}
+
+.list-trigger__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
 /* ---------- Workspace ---------- */
 
 .workspace {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -412,13 +465,47 @@ svg {
 
 .listpane {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   width: 40%;
-  min-width: 300px;
-  max-width: 600px;
+  min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--border-soft);
   background: var(--bg);
+}
+
+/* Draggable splitter between list and preview. 1px line, 9px hit area. */
+.splitter {
+  position: relative;
+  flex: none;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border-soft);
+  transition: background-color 120ms ease;
+}
+
+.splitter:hover::after {
+  background: var(--border-strong);
+}
+
+.splitter:focus-visible {
+  background: var(--accent-ring);
+}
+
+.splitter:focus-visible::after,
+.splitter--dragging::after {
+  background: var(--accent);
 }
 
 .list {
@@ -426,6 +513,12 @@ svg {
   min-height: 0;
   overflow-y: auto;
   padding: 8px;
+  outline: none;
+}
+
+.list:focus-within .row--kbd {
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 2px var(--accent-ring);
 }
 
 .list__status {
@@ -438,6 +531,77 @@ svg {
 .list__more {
   width: 100%;
   margin-top: 4px;
+}
+
+.loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.loading__spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: board-spin 720ms linear infinite;
+}
+
+@keyframes board-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading__spinner {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.list__status.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Overlay list used by the narrow board mode. */
+.list-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+}
+
+.list-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.list-overlay .list {
+  flex: 1;
+  min-height: 0;
+}
+
+.error__retry {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  flex: none;
 }
 
 /* ---------- Rows ---------- */
@@ -784,6 +948,9 @@ svg {
 }
 
 .detail__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 12px 28px 0;
   padding: 9px 12px;
   border: 1px solid rgba(218, 91, 74, 0.4);
@@ -791,6 +958,10 @@ svg {
   background: rgba(218, 91, 74, 0.08);
   font-size: 12px;
   color: #e08a7d;
+}
+
+.detail__error .error__retry {
+  margin-left: auto;
 }
 
 .busybar {
@@ -1399,11 +1570,6 @@ svg {
 }
 
 @media (max-width: 1024px) {
-  .listpane {
-    width: 39%;
-    min-width: 290px;
-  }
-
   .search {
     max-width: 380px;
   }
@@ -1426,10 +1592,6 @@ svg {
 
   .masthead {
     padding: 0 12px;
-  }
-
-  .listpane {
-    min-width: 260px;
   }
 
   .detail__header {

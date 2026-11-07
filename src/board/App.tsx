@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+  RefObject
+} from 'react';
 import type {
   BoardAuthor,
   BoardComment,
@@ -37,6 +42,7 @@ type IconName =
   | 'copy'
   | 'external'
   | 'close'
+  | 'list'
   | 'repo';
 
 const ICONS: Record<IconName, ReactNode> = {
@@ -118,6 +124,7 @@ const ICONS: Record<IconName, ReactNode> = {
     </>
   ),
   close: <path d="m4.2 4.2 7.6 7.6M11.8 4.2l-7.6 7.6" />,
+  list: <path d="M3 4.4h10M3 8h10M3 11.6h10" />,
   repo: (
     <>
       <path d="M2.4 4.3c0-.9.7-1.6 1.6-1.6h2.2l1.3 1.5h4.5c.9 0 1.6.7 1.6 1.6v6c0 .9-.7 1.6-1.6 1.6H4c-.9 0-1.6-.7-1.6-1.6Z" />
@@ -395,9 +402,31 @@ function Markdown({ body }: { body: string }) {
   return <div className="markdown">{blocks}</div>;
 }
 
-function ListRow({ item, active, onSelect }: { item: BoardItemSummary; active: boolean; onSelect: () => void }) {
+function ListRow({
+  item,
+  active,
+  keyboardActive,
+  id,
+  onSelect
+}: {
+  item: BoardItemSummary;
+  active: boolean;
+  keyboardActive: boolean;
+  id: string;
+  onSelect: () => void;
+}) {
   return (
-    <button type="button" className={`row${active ? ' row--active' : ''}`} aria-current={active || undefined} onClick={onSelect}>
+    <button
+      type="button"
+      id={id}
+      tabIndex={-1}
+      role="option"
+      className={`row${active ? ' row--active' : ''}${keyboardActive ? ' row--kbd' : ''}`}
+      aria-selected={active}
+      aria-current={active || undefined}
+      data-list-active={keyboardActive || undefined}
+      onClick={onSelect}
+    >
       <ItemIcon kind={item.kind} state={item.state} draft={item.draft} className="row__icon" />
       <span className="row__content">
         <span className="row__title">
@@ -440,6 +469,371 @@ function CommentView({ comment }: { comment: BoardComment }) {
   );
 }
 
+const LIST_WIDTH_KEY = 'gitstudio.board.listWidth';
+const MIN_LIST_WIDTH = 260;
+const NARROW_BREAKPOINT = 760;
+
+function readStoredListWidth(): number | null {
+  try {
+    const value = Number.parseInt(window.localStorage.getItem(LIST_WIDTH_KEY) ?? '', 10);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function Loading({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <span className="loading" role="status">
+      <span className="loading__spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function ErrorState({ message, variant }: { message: string; variant: 'list' | 'detail' }) {
+  return (
+    <div className={variant === 'list' ? 'list__status error' : 'detail__error'}>
+      <span>{message}</span>
+      <button type="button" className="btn error__retry" onClick={() => post({ type: 'refresh' })}>
+        Retry
+      </button>
+    </div>
+  );
+}
+
+function useListKeyboard<T>({
+  items,
+  selectedIndex,
+  listRef,
+  onPick
+}: {
+  items: T[];
+  selectedIndex: number;
+  listRef: RefObject<HTMLDivElement | null>;
+  onPick: (index: number) => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  useEffect(() => {
+    setActiveIndex((current) => {
+      if (selectedIndex >= 0) {
+        return selectedIndex;
+      }
+      if (items.length === 0) {
+        return -1;
+      }
+      return current < 0 ? 0 : Math.min(current, items.length - 1);
+    });
+  }, [selectedIndex, items.length]);
+
+  useEffect(() => {
+    if (activeIndex < 0) {
+      return;
+    }
+    listRef.current?.querySelector<HTMLElement>('[data-list-active="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, listRef]);
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (items.length === 0) {
+      return;
+    }
+    const anchor = activeIndex >= 0 ? activeIndex : selectedIndex;
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        setActiveIndex(Math.min(anchor + 1, items.length - 1));
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        setActiveIndex(Math.max(anchor - 1, 0));
+        break;
+      case 'Home':
+        event.preventDefault();
+        setActiveIndex(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        setActiveIndex(items.length - 1);
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (activeIndex >= 0) {
+          onPick(activeIndex);
+        }
+        break;
+    }
+  };
+
+  const onFocus = () => {
+    setActiveIndex((current) => (current >= 0 ? current : selectedIndex >= 0 ? selectedIndex : items.length > 0 ? 0 : -1));
+  };
+
+  return { activeIndex, onKeyDown, onFocus };
+}
+
+function SourceList({
+  kind,
+  items,
+  selected,
+  loading,
+  error,
+  hasMore,
+  listRef,
+  onSelect,
+  onLoadMore
+}: {
+  kind: BoardKind;
+  items: BoardItemSummary[];
+  selected: number | null;
+  loading: boolean;
+  error?: string;
+  hasMore: boolean;
+  listRef: RefObject<HTMLDivElement | null>;
+  onSelect: (item: BoardItemSummary) => void;
+  onLoadMore: () => void;
+}) {
+  const listId = useId();
+  const selectedIndex = selected === null ? -1 : items.findIndex((item) => item.number === selected);
+  const keyboard = useListKeyboard({ items, selectedIndex, listRef, onPick: (index) => onSelect(items[index]) });
+  const activeItem = keyboard.activeIndex >= 0 ? items[keyboard.activeIndex] : undefined;
+
+  return (
+    <div
+      className="list"
+      ref={listRef}
+      role="listbox"
+      aria-label={KIND_LABEL[kind]}
+      aria-activedescendant={activeItem ? `${listId}-${activeItem.number}` : undefined}
+      tabIndex={0}
+      onKeyDown={keyboard.onKeyDown}
+      onFocus={keyboard.onFocus}
+    >
+      {loading && items.length === 0 ? <div className="list__status"><Loading /></div> : null}
+      {error ? <ErrorState message={error} variant="list" /> : null}
+      {!loading && !error && items.length === 0 ? (
+        <div className="list__status">No {KIND_LABEL[kind].toLowerCase()} found.</div>
+      ) : null}
+      {items.map((item, index) => (
+        <ListRow
+          key={`${item.kind}-${item.number}`}
+          id={`${listId}-${item.number}`}
+          item={item}
+          active={selected === item.number}
+          keyboardActive={keyboard.activeIndex === index}
+          onSelect={() => {
+            listRef.current?.focus();
+            onSelect(item);
+          }}
+        />
+      ))}
+      {hasMore ? (
+        <button className="btn list__more" disabled={loading} onClick={onLoadMore}>
+          {loading ? <Loading /> : 'Load more'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function TrackerList({
+  items,
+  selected,
+  loading,
+  error,
+  hasMore,
+  onSelect,
+  onLoadMore
+}: {
+  items: BoardTrackerItem[];
+  selected: string | null;
+  loading: boolean;
+  error?: string;
+  hasMore: boolean;
+  onSelect: (item: BoardTrackerItem) => void;
+  onLoadMore: () => void;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const selectedIndex = selected === null ? -1 : items.findIndex((item) => item.id === selected);
+  const keyboard = useListKeyboard({ items, selectedIndex, listRef, onPick: (index) => onSelect(items[index]) });
+  const activeItem = keyboard.activeIndex >= 0 ? items[keyboard.activeIndex] : undefined;
+
+  return (
+    <div
+      className="list"
+      ref={listRef}
+      role="listbox"
+      aria-label="Work items"
+      aria-activedescendant={activeItem ? `${listId}-${activeItem.id}` : undefined}
+      tabIndex={0}
+      onKeyDown={keyboard.onKeyDown}
+      onFocus={keyboard.onFocus}
+    >
+      {loading && items.length === 0 ? <div className="list__status"><Loading /></div> : null}
+      {error ? <ErrorState message={error} variant="list" /> : null}
+      {!loading && !error && items.length === 0 ? <div className="list__status">No work items found.</div> : null}
+      {items.map((item, index) => (
+        <button
+          key={item.id}
+          id={`${listId}-${item.id}`}
+          type="button"
+          tabIndex={-1}
+          role="option"
+          className={`row${selected === item.id ? ' row--active' : ''}${keyboard.activeIndex === index ? ' row--kbd' : ''}`}
+          aria-selected={selected === item.id}
+          aria-current={selected === item.id || undefined}
+          data-list-active={keyboard.activeIndex === index || undefined}
+          onClick={() => {
+            listRef.current?.focus();
+            onSelect(item);
+          }}
+        >
+          <span className="row__content">
+            <span className="row__title">{item.title}</span>
+            <span className="row__meta">
+              <span className="row__number">{item.identifier}</span>
+              {item.state ? <span className="row__meta-item">{item.state.name}</span> : null}
+              {item.assignee ? <span className="row__meta-item">{item.assignee.login}</span> : null}
+              {item.labels.slice(0, 2).map((label) => <LabelChip key={label.name} {...label} />)}
+            </span>
+          </span>
+        </button>
+      ))}
+      {hasMore ? (
+        <button className="btn list__more" disabled={loading} onClick={onLoadMore}>
+          {loading ? <Loading /> : 'Load more'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function Workspace({
+  narrow,
+  listOpen,
+  listWidth,
+  onListWidthChange,
+  onCloseList,
+  list,
+  detail
+}: {
+  narrow: boolean;
+  listOpen: boolean;
+  listWidth: number | null;
+  onListWidthChange: (width: number) => void;
+  onCloseList: () => void;
+  list: ReactNode;
+  detail: ReactNode;
+}) {
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!narrow || !listOpen) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      workspaceRef.current?.querySelector<HTMLElement>('.list-overlay .list')?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [narrow, listOpen]);
+
+  useEffect(() => {
+    const node = workspaceRef.current;
+    if (!node) {
+      return;
+    }
+    const observer = new ResizeObserver(() => setContainerWidth(node.getBoundingClientRect().width));
+    observer.observe(node);
+    setContainerWidth(node.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, []);
+
+  const maxWidth = Math.max(MIN_LIST_WIDTH, Math.round(containerWidth * 0.6));
+  const preferredWidth = listWidth ?? (Math.round(containerWidth * 0.4) || 320);
+  const effectiveWidth = Math.min(Math.max(preferredWidth, MIN_LIST_WIDTH), maxWidth);
+  const width = dragWidth ?? effectiveWidth;
+
+  const clampWidth = (next: number) => Math.min(Math.max(Math.round(next), MIN_LIST_WIDTH), maxWidth);
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging) {
+      return;
+    }
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragWidth(clampWidth(event.clientX - rect.left));
+    }
+  };
+
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging) {
+      return;
+    }
+    setDragging(false);
+    if (dragWidth !== null) {
+      onListWidthChange(dragWidth);
+      setDragWidth(null);
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const onSeparatorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+    event.preventDefault();
+    onListWidthChange(clampWidth(effectiveWidth + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 40 : 10)));
+  };
+
+  return (
+    <div className={`workspace${narrow ? ' workspace--narrow' : ''}`} ref={workspaceRef}>
+      {narrow ? null : (
+        <>
+          <aside className="listpane" style={{ width: `${width}px` }}>
+            {list}
+          </aside>
+          <div
+            className={`splitter${dragging ? ' splitter--dragging' : ''}`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize item list"
+            aria-valuenow={width}
+            aria-valuemin={MIN_LIST_WIDTH}
+            aria-valuemax={maxWidth}
+            tabIndex={0}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onKeyDown={onSeparatorKeyDown}
+          />
+        </>
+      )}
+      <main className="detailpane">{detail}</main>
+      {narrow && listOpen ? (
+        <>
+          <div className="list-overlay__backdrop" onClick={onCloseList} />
+          <div className="list-overlay" id="board-list-overlay">
+            {list}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function DetailPane({
   detail,
   loading,
@@ -456,7 +850,8 @@ function DetailPane({
   onReview,
   onVote,
   onOpen,
-  onCopy
+  onCopy,
+  onRefresh
 }: {
   detail: BoardItemDetail | null;
   loading: boolean;
@@ -474,12 +869,17 @@ function DetailPane({
   onVote: (votes: Record<string, number>) => void;
   onOpen: (url: string) => void;
   onCopy: (text: string) => void;
+  onRefresh: () => void;
 }) {
   const [draft, setDraft] = useState('');
   const [votes, setVotes] = useState<Record<string, number>>({});
 
   if (loading && !detail) {
-    return <div className="detail detail--empty">Loading…</div>;
+    return (
+      <div className="detail detail--empty">
+        <Loading />
+      </div>
+    );
   }
   if (!detail) {
     return <div className="detail detail--empty">Select an item to preview it.</div>;
@@ -493,6 +893,14 @@ function DetailPane({
   const reviewerLogins = new Set(reviewers.map((reviewer) => reviewer.login.toLowerCase()));
   const addableReviewers = reviewerOptions?.filter((reviewer) => !reviewerLogins.has(reviewer.login.toLowerCase())) ?? [];
   const voteLabels = (detail.voteLabels ?? []).filter((label) => label.permitted.length > 0);
+  const canSubmitComment = detail.canComment && !busy && draft.trim().length > 0;
+  const submitComment = () => {
+    if (!canSubmitComment) {
+      return;
+    }
+    onComment(draft.trim());
+    setDraft('');
+  };
 
   return (
     <div className="detail">
@@ -504,6 +912,15 @@ function DetailPane({
             <span className="detail__number">#{detail.number}</span>
           </span>
           <div className="detail__actions">
+            <button
+              type="button"
+              className="icon-btn"
+              title="Refresh"
+              aria-label="Refresh"
+              onClick={onRefresh}
+            >
+              <Icon name="refresh" />
+            </button>
             <button
               type="button"
               className="icon-btn"
@@ -673,6 +1090,12 @@ function DetailPane({
                 aria-label="Leave a comment"
                 placeholder="Leave a comment…"
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    submitComment();
+                  }
+                }}
               />
             </div>
           ) : (
@@ -761,14 +1184,7 @@ function DetailPane({
               </div>
             ) : null}
             {detail.canComment ? (
-              <button
-                className="btn btn--primary"
-                disabled={busy || draft.trim().length === 0}
-                onClick={() => {
-                  onComment(draft.trim());
-                  setDraft('');
-                }}
-              >
+              <button className="btn btn--primary" disabled={!canSubmitComment} onClick={submitComment}>
                 Comment
               </button>
             ) : null}
@@ -786,6 +1202,11 @@ function TrackerWorkspace({
   loading,
   error,
   hasMore,
+  narrow,
+  listOpen,
+  listWidth,
+  onListWidthChange,
+  onCloseList,
   onSelect,
   onLoadMore,
   onOpen
@@ -796,82 +1217,76 @@ function TrackerWorkspace({
   loading: boolean;
   error?: string;
   hasMore: boolean;
+  narrow: boolean;
+  listOpen: boolean;
+  listWidth: number | null;
+  onListWidthChange: (width: number) => void;
+  onCloseList: () => void;
   onSelect: (item: BoardTrackerItem) => void;
   onLoadMore: () => void;
   onOpen: (url: string) => void;
 }) {
   return (
-    <div className="workspace">
-      <aside className="listpane">
-        <div className="list">
-          {loading && items.length === 0 ? <div className="list__status">Loading…</div> : null}
-          {error ? <div className="list__status error">{error}</div> : null}
-          {!loading && !error && items.length === 0 ? <div className="list__status">No work items found.</div> : null}
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`row${selected === item.id ? ' row--active' : ''}`}
-              aria-current={selected === item.id || undefined}
-              onClick={() => onSelect(item)}
-            >
-              <span className="row__content">
-                <span className="row__title">{item.title}</span>
-                <span className="row__meta">
-                  <span className="row__number">{item.identifier}</span>
-                  {item.state ? <span className="row__meta-item">{item.state.name}</span> : null}
-                  {item.assignee ? <span className="row__meta-item">{item.assignee.login}</span> : null}
-                  {item.labels.slice(0, 2).map((label) => <LabelChip key={label.name} {...label} />)}
-                </span>
-              </span>
-            </button>
-          ))}
-          {hasMore ? (
-            <button className="btn list__more" disabled={loading} onClick={onLoadMore}>
-              {loading ? 'Loading…' : 'Load more'}
-            </button>
-          ) : null}
-        </div>
-      </aside>
-      <main className="detailpane">
-        {error ? <div className="detail__error">{error}</div> : null}
-        {!detail ? (
-          <div className="detail detail--empty">{loading ? 'Loading…' : 'Select a work item to preview it.'}</div>
-        ) : (
-          <div className="detail">
-            <header className="detail__header">
-              <div className="detail__kicker">
-                <span className="detail__ref"><span className="detail__number">{detail.identifier}</span></span>
-                <div className="detail__actions">
-                  <button className="ghost-link" type="button" onClick={() => onOpen(detail.url)}>
-                    Open<Icon name="external" />
-                  </button>
-                </div>
-              </div>
-              <h1 className="detail__title">{detail.title}</h1>
-            </header>
-            <div className="detail__body">
-              <dl className="meta">
-                <dt>State</dt>
-                <dd>{detail.state ? detail.state.name : 'None'}</dd>
-                <dt>Priority</dt>
-                <dd>{detail.priority}</dd>
-                <dt>Assignee</dt>
-                <dd>{detail.assignee ? detail.assignee.login : 'None'}</dd>
-                {detail.container ? (<><dt>Project</dt><dd>{detail.container.name}</dd></>) : null}
-                <dt>Labels</dt>
-                <dd>{detail.labels.length > 0 ? detail.labels.map((label) => <LabelChip key={label.name} {...label} />) : <span className="meta__none">None</span>}</dd>
-              </dl>
-              <Markdown body={detail.description || '_No description._'} />
-              <section className="comments">
-                <h2>{detail.comments.length} comment{detail.comments.length === 1 ? '' : 's'}</h2>
-                {detail.comments.map((comment) => <CommentView key={comment.id} comment={comment} />)}
-              </section>
+    <Workspace
+      narrow={narrow}
+      listOpen={listOpen}
+      listWidth={listWidth}
+      onListWidthChange={onListWidthChange}
+      onCloseList={onCloseList}
+      list={
+        <TrackerList
+          items={items}
+          selected={selected}
+          loading={loading}
+          error={error}
+          hasMore={hasMore}
+          onSelect={onSelect}
+          onLoadMore={onLoadMore}
+        />
+      }
+      detail={
+        <>
+          {error ? <ErrorState message={error} variant="detail" /> : null}
+          {!detail ? (
+            <div className="detail detail--empty">
+              {loading ? <Loading /> : 'Select a work item to preview it.'}
             </div>
-          </div>
-        )}
-      </main>
-    </div>
+          ) : (
+            <div className="detail">
+              <header className="detail__header">
+                <div className="detail__kicker">
+                  <span className="detail__ref"><span className="detail__number">{detail.identifier}</span></span>
+                  <div className="detail__actions">
+                    <button className="ghost-link" type="button" onClick={() => onOpen(detail.url)}>
+                      Open<Icon name="external" />
+                    </button>
+                  </div>
+                </div>
+                <h1 className="detail__title">{detail.title}</h1>
+              </header>
+              <div className="detail__body">
+                <dl className="meta">
+                  <dt>State</dt>
+                  <dd>{detail.state ? detail.state.name : 'None'}</dd>
+                  <dt>Priority</dt>
+                  <dd>{detail.priority}</dd>
+                  <dt>Assignee</dt>
+                  <dd>{detail.assignee ? detail.assignee.login : 'None'}</dd>
+                  {detail.container ? (<><dt>Project</dt><dd>{detail.container.name}</dd></>) : null}
+                  <dt>Labels</dt>
+                  <dd>{detail.labels.length > 0 ? detail.labels.map((label) => <LabelChip key={label.name} {...label} />) : <span className="meta__none">None</span>}</dd>
+                </dl>
+                <Markdown body={detail.description || '_No description._'} />
+                <section className="comments">
+                  <h2>{detail.comments.length} comment{detail.comments.length === 1 ? '' : 's'}</h2>
+                  {detail.comments.map((comment) => <CommentView key={comment.id} comment={comment} />)}
+                </section>
+              </div>
+            </div>
+          )}
+        </>
+      }
+    />
   );
 }
 
@@ -908,6 +1323,11 @@ export function App() {
   const [reviewerOptions, setReviewerOptions] = useState<BoardAuthor[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | undefined>();
+  const [narrow, setNarrow] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [listWidth, setListWidth] = useState<number | null>(readStoredListWidth);
+  const appRef = useRef<HTMLDivElement>(null);
+  const sourceListRef = useRef<HTMLDivElement>(null);
   const requestId = useRef(0);
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
@@ -918,6 +1338,48 @@ export function App() {
   const trackerDetailRequest = useRef(0);
   const activeProvider = useRef<string | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    const node = appRef.current;
+    if (!node) {
+      return;
+    }
+    const observer = new ResizeObserver(() => setNarrow(node.getBoundingClientRect().width < NARROW_BREAKPOINT));
+    observer.observe(node);
+    setNarrow(node.getBoundingClientRect().width < NARROW_BREAKPOINT);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (narrow) {
+      return;
+    }
+    setListOpen(false);
+  }, [narrow]);
+
+  useEffect(() => {
+    if (!listOpen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setListOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [listOpen]);
+
+  useEffect(() => {
+    if (listWidth === null) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(LIST_WIDTH_KEY, String(Math.round(listWidth)));
+    } catch {
+      // Persisting the split width is best-effort.
+    }
+  }, [listWidth]);
 
   useEffect(() => {
     const off = onMessage((message) => {
@@ -1075,6 +1537,7 @@ export function App() {
   };
 
   const selectItem = (item: BoardItemSummary) => {
+    setListOpen(false);
     setSelected(item.number);
     setDetail(null);
     setDetailLoading(true);
@@ -1108,6 +1571,7 @@ export function App() {
   }, [trackerOpen, trackerId, trackerState]);
 
   const selectTrackerItem = (item: BoardTrackerItem) => {
+    setListOpen(false);
     setTrackerSelected(item.id);
     setTrackerDetail(null);
     setTrackerLoading(true);
@@ -1131,9 +1595,12 @@ export function App() {
   }, [repo, trackers.length]);
 
   const repoLabel = repo ? `${repo.owner}/${repo.name}` : '';
+  const activeListLabel = trackerOpen
+    ? trackerDetail?.title ?? trackerItems.find((item) => item.id === trackerSelected)?.title ?? 'Select an item'
+    : detail?.title ?? items.find((item) => item.number === selected)?.title ?? 'Select an item';
 
   return (
-    <div className="app">
+    <div className="app" ref={appRef}>
       <header className="masthead">
         <span className="masthead__title">Issues and PRs</span>
         <div className="masthead__actions">
@@ -1176,7 +1643,7 @@ export function App() {
                   role="tab"
                   aria-selected={!trackerOpen && kind === entry}
                   className={`tab${!trackerOpen && kind === entry ? ' tab--active' : ''}`}
-                  onClick={() => { setTrackerOpen(false); setKind(entry); }}
+                  onClick={() => { setListOpen(false); setTrackerOpen(false); setKind(entry); }}
                 >
                   <Icon name={kindIconName(entry)} className="tab__icon" />
                   {KIND_LABEL[entry]}
@@ -1188,7 +1655,7 @@ export function App() {
                   role="tab"
                   aria-selected={trackerOpen}
                   className={`tab${trackerOpen ? ' tab--active' : ''}`}
-                  onClick={() => setTrackerOpen(true)}
+                  onClick={() => { setListOpen(false); setTrackerOpen(true); }}
                 >
                   <Icon name="record" className="tab__icon" />
                   Tracker
@@ -1202,6 +1669,20 @@ export function App() {
               </span>
             ) : null}
             <div className="toolbar__right">
+              {narrow ? (
+                <button
+                  type="button"
+                  className="list-trigger"
+                  aria-expanded={listOpen}
+                  aria-controls="board-list-overlay"
+                  title={activeListLabel}
+                  onClick={() => setListOpen((open) => !open)}
+                >
+                  <Icon name="list" className="list-trigger__icon" />
+                  <span className="list-trigger__label">{activeListLabel}</span>
+                  <Icon name="chevron" className="list-trigger__chevron" />
+                </button>
+              ) : null}
               {trackerOpen ? (
                 <div className="filter">
                   <select
@@ -1226,6 +1707,24 @@ export function App() {
                       placeholder={`Search ${KIND_LABEL[kind].toLowerCase()}…`}
                       aria-label={`Search ${KIND_LABEL[kind].toLowerCase()}`}
                       onChange={(event) => onSearchChange(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'ArrowDown') {
+                          event.preventDefault();
+                          if (narrow) {
+                            setListOpen(true);
+                          } else {
+                            sourceListRef.current?.focus();
+                          }
+                        } else if (event.key === 'Escape') {
+                          event.stopPropagation();
+                          if (search) {
+                            event.preventDefault();
+                            onSearchChange('');
+                          } else {
+                            event.currentTarget.blur();
+                          }
+                        }
+                      }}
                     />
                     {search ? (
                       <button
@@ -1273,46 +1772,44 @@ export function App() {
               loading={trackerLoading}
               error={trackerError}
               hasMore={trackerHasMore}
+              narrow={narrow}
+              listOpen={listOpen}
+              listWidth={listWidth}
+              onListWidthChange={setListWidth}
+              onCloseList={() => setListOpen(false)}
               onSelect={selectTrackerItem}
               onLoadMore={() => loadTracker(trackerState, true)}
               onOpen={(url) => post({ type: 'openExternal', url })}
             />
           ) : (
-            <div className="workspace">
-            <aside className="listpane">
-              <div className="list">
-                {listLoading && items.length === 0 ? <div className="list__status">Loading…</div> : null}
-                {listError ? <div className="list__status error">{listError}</div> : null}
-                {!listLoading && !listError && items.length === 0 ? (
-                  <div className="list__status">No {KIND_LABEL[kind].toLowerCase()} found.</div>
-                ) : null}
-                {items.map((item) => (
-                  <ListRow
-                    key={`${item.kind}-${item.number}`}
-                    item={item}
-                    active={selected === item.number}
-                    onSelect={() => selectItem(item)}
-                  />
-                ))}
-                {hasMore ? (
-                  <button
-                    className="btn list__more"
-                    disabled={listLoading}
-                    onClick={() => {
-                      const next = page + 1;
-                      setPage(next);
-                      loadList(next, true);
-                    }}
-                  >
-                    {listLoading ? 'Loading…' : 'Load more'}
-                  </button>
-                ) : null}
-              </div>
-            </aside>
-            <main className="detailpane">
-              {detailError ? <div className="detail__error">{detailError}</div> : null}
-              {busy ? <div className="busybar">{busyLabel ?? 'Working'}…</div> : null}
-              <DetailPane
+            <Workspace
+              narrow={narrow}
+              listOpen={listOpen}
+              listWidth={listWidth}
+              onListWidthChange={setListWidth}
+              onCloseList={() => setListOpen(false)}
+              list={
+                <SourceList
+                  kind={kind}
+                  items={items}
+                  selected={selected}
+                  loading={listLoading}
+                  error={listError}
+                  hasMore={hasMore}
+                  listRef={sourceListRef}
+                  onSelect={selectItem}
+                  onLoadMore={() => {
+                    const next = page + 1;
+                    setPage(next);
+                    loadList(next, true);
+                  }}
+                />
+              }
+              detail={
+                <>
+                  {detailError ? <ErrorState message={detailError} variant="detail" /> : null}
+                  {busy ? <div className="busybar">{busyLabel ?? 'Working'}…</div> : null}
+                  <DetailPane
                 key={detail ? `${detail.kind}-${detail.number}` : 'empty'}
                 detail={detail}
                 loading={detailLoading}
@@ -1349,11 +1846,13 @@ export function App() {
                   if (selected == null) return;
                   post({ type: 'review', number: selected, votes });
                 }}
-                onOpen={(url) => post({ type: 'openExternal', url })}
-                onCopy={(text) => post({ type: 'copy', text })}
-              />
-            </main>
-          </div>
+                    onOpen={(url) => post({ type: 'openExternal', url })}
+                    onCopy={(text) => post({ type: 'copy', text })}
+                    onRefresh={() => post({ type: 'refresh' })}
+                  />
+                </>
+              }
+            />
           )}
         </>
       )}
