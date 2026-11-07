@@ -4,7 +4,7 @@ import { loadRefs } from '../git/refs';
 import { resolveCommit } from '../git/revision';
 import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
-import { inferBaseRef, isMainline, loadMainlines } from './baseBranch';
+import { inferBaseRef, isMainline, type BaseInference } from './baseBranch';
 
 interface RefItem extends vscode.QuickPickItem {
   value?: string;
@@ -15,9 +15,18 @@ export interface PickRefOptions {
   allowCustom?: boolean;
   includeHead?: boolean;
   excludeCurrent?: boolean;
+  /** Show every ref instead of the capped recent list. */
+  all?: boolean;
   /** When set, an inferred base branch is offered first and mainlines second. */
   inference?: { currentRef: string };
 }
+
+const LIMIT = {
+  mainlines: 20,
+  local: 40,
+  remote: 40,
+  tags: 20
+};
 
 function refItem(ref: RefInfo): RefItem {
   return {
@@ -32,31 +41,154 @@ export function shortRef(ref: string): string {
   return ref.startsWith('refs/') ? ref.replace(/^refs\/(heads|remotes|tags)\//, '') : ref;
 }
 
+interface PickerHandle {
+  promise: Promise<RefItem | undefined>;
+  update(items: RefItem[], busy: boolean): void;
+}
+
+function openPicker(items: RefItem[], placeholder: string): PickerHandle {
+  const quickPick = vscode.window.createQuickPick<RefItem>();
+  quickPick.placeholder = placeholder;
+  quickPick.matchOnDescription = true;
+  quickPick.items = items;
+  quickPick.busy = true;
+
+  let disposed = false;
+  const promise = new Promise<RefItem | undefined>((resolve) => {
+    let settled = false;
+    const done = (value: RefItem | undefined) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      disposed = true;
+      quickPick.dispose();
+      resolve(value);
+    };
+    quickPick.onDidAccept(() => done(quickPick.selectedItems[0]));
+    quickPick.onDidHide(() => done(undefined));
+  });
+  quickPick.show();
+
+  return {
+    promise,
+    update(next, busy) {
+      if (disposed) {
+        return;
+      }
+      quickPick.busy = busy;
+      quickPick.items = next;
+    }
+  };
+}
+
 export async function pickRef(
   services: Services,
   repo: RepoHandle,
   options: PickRefOptions = {}
 ): Promise<string | undefined> {
-  const refs = await loadRefs(services.runner, repo.root);
-  const byName = new Map(refs.map((ref) => [ref.name, ref]));
-  const byRecency = (a: RefInfo, b: RefInfo) => b.committerDate - a.committerDate;
-  const locals = refs.filter((ref) => ref.type === 'local' || ref.type === 'head').sort(byRecency);
-  const remotes = refs.filter((ref) => ref.type === 'remote').sort(byRecency);
-  const tags = refs.filter((ref) => ref.type === 'tag').sort(byRecency);
+  const loading: RefItem[] = [
+    { label: '$(sync~spin) Loading refs…', kind: vscode.QuickPickItemKind.Separator }
+  ];
+  let refs: RefInfo[] | undefined;
+  let inference: BaseInference | undefined;
+  let all = options.all ?? false;
 
+  while (true) {
+    const handle = openPicker(loading, options.placeHolder ?? 'Select a ref…');
+
+    if (!refs) {
+      try {
+        refs = await loadRefs(services.runner, repo.root);
+        inference = options.inference ? await inferBaseRef(services, repo, refs, options.inference.currentRef) : undefined;
+      } catch (error) {
+        handle.update([{ label: '$(error) Failed to load refs', description: String(error) }], false);
+        await handle.promise;
+        return undefined;
+      }
+    }
+    handle.update(buildItems(refs, inference, options, all), false);
+
+    const picked = await handle.promise;
+    if (!picked?.value) {
+      return undefined;
+    }
+    if (picked.value === '__all__') {
+      all = true;
+      continue;
+    }
+    if (picked.value !== '__custom__') {
+      return picked.value;
+    }
+
+    const input = await vscode.window.showInputBox({
+      prompt: 'Commit, branch or tag',
+      placeHolder: 'e.g. origin/main or a1b2c3d'
+    });
+    const revision = input?.trim();
+    if (!revision) {
+      return undefined;
+    }
+
+    try {
+      await resolveCommit(services.runner, repo.root, revision);
+      return revision;
+    } catch {
+      void vscode.window.showErrorMessage(`Git Studio: unknown revision "${revision}".`);
+      return undefined;
+    }
+  }
+}
+
+function buildItems(
+  refs: RefInfo[],
+  inference: BaseInference | undefined,
+  options: PickRefOptions,
+  all: boolean
+): RefItem[] {
+  const byName = new Map(refs.map((ref) => [ref.name, ref]));
+  const contained = inference?.contained ?? new Set<string>();
+  const currentRef = options.inference?.currentRef;
   const items: RefItem[] = [];
   const used = new Set<string>();
+  let capped = false;
+
   const exclude = (ref: RefInfo) =>
-    used.has(ref.name) || (options.excludeCurrent === true && ref.name === options.inference?.currentRef);
+    used.has(ref.name) || (options.excludeCurrent === true && ref.name === currentRef);
+
+  const isCurrent = (ref: RefInfo) => ref.current || ref.name === currentRef;
+
+  const rank = (ref: RefInfo) => {
+    const current = isCurrent(ref) ? 1 : 0;
+    const isContained = contained.has(ref.name) ? 1 : 0;
+    return [current, isContained, ref.committerDate] as const;
+  };
+
+  const sorted = (group: RefInfo[]) =>
+    [...group].sort((a, b) => {
+      const [ac, am, ad] = rank(a);
+      const [bc, bm, bd] = rank(b);
+      return bc - ac || bm - am || bd - ad || a.shortName.localeCompare(b.shortName);
+    });
 
   const addGroup = (label: string, group: RefInfo[], description?: string) => {
-    const visible = group.filter((ref) => !exclude(ref));
+    const visible = sorted(group).filter((ref) => !exclude(ref));
     if (visible.length === 0) {
       return;
     }
+    const limit = all ? visible.length : Math.min(visible.length, groupLimit(label));
+    if (limit < visible.length) {
+      capped = true;
+    }
     items.push({ label, kind: vscode.QuickPickItemKind.Separator });
-    items.push(...visible.map((ref) => ({ ...refItem(ref), ...(description ? { description } : {}) })));
-    visible.forEach((ref) => used.add(ref.name));
+    items.push(
+      ...visible.slice(0, limit).map((ref) => {
+        const base = description ?? refItem(ref).description;
+        const detail = contained.has(ref.name) && !ref.current ? `${base} · contained` : base;
+        return { ...refItem(ref), description: detail };
+      })
+    );
+    visible.slice(0, limit).forEach((ref) => used.add(ref.name));
   };
 
   const customItem: RefItem = { label: '$(edit) Custom revision…', value: '__custom__' };
@@ -66,8 +198,8 @@ export async function pickRef(
     value: 'HEAD'
   };
 
-  if (options.inference) {
-    const guess = await inferBaseRef(services, repo, refs, options.inference.currentRef);
+  if (inference) {
+    const guess = inference.guess;
     if (guess) {
       const ref = byName.get(guess.ref);
       items.push({
@@ -79,10 +211,10 @@ export async function pickRef(
       used.add(guess.ref);
     }
 
-    const inferredIsMainline = guess ? (byName.has(guess.ref) && isMainline(byName.get(guess.ref)!)) : false;
+    const guessedRef = guess ? byName.get(guess.ref) : undefined;
+    const inferredIsMainline = guessedRef ? isMainline(guessedRef) : false;
     if (!inferredIsMainline) {
-      const mainlines = await loadMainlines(services, repo, refs);
-      addGroup('Mainlines', mainlines, 'mainline');
+      addGroup('Mainlines', inference.mainlines, 'mainline');
     }
 
     if (options.includeHead !== false) {
@@ -97,39 +229,29 @@ export async function pickRef(
     }
   }
 
-  addGroup('Local branches', locals);
-  addGroup('Remote branches', remotes);
-  addGroup('Tags', tags);
+  addGroup('Local branches', refs.filter((ref) => ref.type === 'local' || ref.type === 'head'));
+  addGroup('Remote branches', refs.filter((ref) => ref.type === 'remote'));
+  addGroup('Tags', refs.filter((ref) => ref.type === 'tag'));
 
-  if (options.inference && options.allowCustom !== false) {
+  if (capped) {
+    items.push({ label: '$(list-unordered) Show all refs…', value: '__all__' });
+  }
+  if (inference && options.allowCustom !== false) {
     items.push(customItem);
   }
 
-  const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: options.placeHolder ?? 'Select a ref…',
-    matchOnDescription: true
-  });
-  if (!picked?.value) {
-    return undefined;
-  }
-  if (picked.value !== '__custom__') {
-    return picked.value;
-  }
+  return items;
+}
 
-  const input = await vscode.window.showInputBox({
-    prompt: 'Commit, branch or tag',
-    placeHolder: 'e.g. origin/main or a1b2c3d'
-  });
-  const revision = input?.trim();
-  if (!revision) {
-    return undefined;
+function groupLimit(label: string): number {
+  if (label === 'Mainlines') {
+    return LIMIT.mainlines;
   }
-
-  try {
-    await resolveCommit(services.runner, repo.root, revision);
-    return revision;
-  } catch {
-    void vscode.window.showErrorMessage(`Git Studio: unknown revision "${revision}".`);
-    return undefined;
+  if (label === 'Local branches') {
+    return LIMIT.local;
   }
+  if (label === 'Remote branches') {
+    return LIMIT.remote;
+  }
+  return LIMIT.tags;
 }

@@ -8,7 +8,15 @@ export interface BaseGuess {
   reason: string;
 }
 
+export interface BaseInference {
+  guess?: BaseGuess;
+  mainlines: RefInfo[];
+  contained: Set<string>;
+}
+
 const MAINLINE = /^(main|master|develop|dev|trunk|next|stable|release(\/.*)?)$/i;
+const STALE_SECONDS = 90 * 24 * 60 * 60;
+const CACHE_TTL_MS = 10_000;
 
 function isBranch(ref: RefInfo): boolean {
   return ref.type === 'local' || ref.type === 'head' || ref.type === 'remote';
@@ -39,15 +47,25 @@ export function isMainline(ref: RefInfo): boolean {
   return isBranch(ref) && MAINLINE.test(branchBaseName(ref));
 }
 
+/** Most recently updated first; name rank only breaks ties. */
+export function sortMainlines(refs: RefInfo[]): RefInfo[] {
+  return [...refs].sort(
+    (a, b) =>
+      b.committerDate - a.committerDate ||
+      mainlineRank(a) - mainlineRank(b) ||
+      a.shortName.localeCompare(b.shortName)
+  );
+}
+
 export async function loadMainlines(services: Services, repo: RepoHandle, refs: RefInfo[]): Promise<RefInfo[]> {
   const originHead = (await services.runner
     .run(['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD'], repo.root)
     .catch(() => ''))
     .trim();
 
-  return refs
-    .filter((ref) => isMainline(ref) || (originHead !== '' && ref.shortName === originHead))
-    .sort((a, b) => mainlineRank(a) - mainlineRank(b) || a.shortName.localeCompare(b.shortName));
+  return sortMainlines(
+    refs.filter((ref) => isMainline(ref) || (originHead !== '' && ref.shortName === originHead))
+  );
 }
 
 async function count(services: Services, repo: RepoHandle, range: string): Promise<number> {
@@ -81,17 +99,62 @@ function findRef(source: string, refs: RefInfo[], usable: RefInfo[]): RefInfo | 
   );
 }
 
-export async function inferBaseRef(
+function guessOf(ref: RefInfo, reason: string): BaseGuess {
+  return { ref: ref.name, label: ref.shortName, reason };
+}
+
+function preferActive(candidate: RefInfo, mainlines: RefInfo[]): { ref: RefInfo; overridden: boolean } {
+  if (!isMainline(candidate)) {
+    return { ref: candidate, overridden: false };
+  }
+  const newest = mainlines[0];
+  if (
+    newest &&
+    newest.name !== candidate.name &&
+    newest.committerDate - candidate.committerDate > STALE_SECONDS
+  ) {
+    return { ref: newest, overridden: true };
+  }
+  return { ref: candidate, overridden: false };
+}
+
+const cache = new Map<string, { at: number; value: Promise<BaseInference> }>();
+
+export function inferBaseRef(
   services: Services,
   repo: RepoHandle,
   refs: RefInfo[],
   currentRef: string
-): Promise<BaseGuess | undefined> {
+): Promise<BaseInference> {
+  const currentOid = refs.find((ref) => ref.name === currentRef)?.oid ?? '';
+  const key = `${repo.root}|${currentRef}|${currentOid}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return hit.value;
+  }
+
+  const value = computeInference(services, repo, refs, currentRef, currentOid).catch((error) => {
+    cache.delete(key);
+    throw error;
+  });
+  cache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+async function computeInference(
+  services: Services,
+  repo: RepoHandle,
+  refs: RefInfo[],
+  currentRef: string,
+  currentOid: string
+): Promise<BaseInference> {
+  const mainlines = await loadMainlines(services, repo, refs);
   const byName = new Map(refs.map((ref) => [ref.name, ref]));
+  const currentShort = currentRef.startsWith('refs/heads/')
+    ? currentRef.slice('refs/heads/'.length)
+    : undefined;
   const current = byName.get(currentRef);
-  const currentShort = currentRef.startsWith('refs/heads/') ? currentRef.slice('refs/heads/'.length) : undefined;
   const currentIsMainline = current ? isMainline(current) : false;
-  const currentOid = (await services.runner.run(['rev-parse', '--verify', currentRef], repo.root).catch(() => '')).trim();
 
   const usable = refs.filter((ref) => {
     if (!isBranch(ref) || ref.name === currentRef) {
@@ -103,10 +166,50 @@ export async function inferBaseRef(
     return true;
   });
 
-  // 1. The branch reflog records where this branch was created from.
-  const reflog = await services.runner
-    .run(['reflog', '--format=%gs', '-n', '120', currentRef], repo.root)
-    .catch(() => '');
+  const [reflog, upstream, mergedNames] = await Promise.all([
+    services.runner.run(['reflog', '--format=%gs', '-n', '80', currentRef], repo.root).catch(() => ''),
+    currentShort
+      ? services.runner
+          .run(['rev-parse', '--abbrev-ref', `${currentShort}@{upstream}`], repo.root)
+          .catch(() => '')
+      : Promise.resolve(''),
+    services.runner
+      .run(
+        ['for-each-ref', '--merged', currentRef, '--format=%(refname)', 'refs/heads', 'refs/remotes'],
+        repo.root
+      )
+      .catch(() => '')
+  ]);
+
+  const contained = new Set(
+    mergedNames
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  );
+
+  // 1. A tracking upstream is the most direct statement of intent.
+  const upstreamName = upstream.trim();
+  if (upstreamName) {
+    const match = usable.find(
+      (ref) => ref.shortName === upstreamName || ref.name === `refs/remotes/${upstreamName}`
+    );
+    if (match) {
+      const picked = preferActive(match, mainlines);
+      return {
+        guess: guessOf(
+          picked.ref,
+          picked.overridden
+            ? `active mainline over stale ${match.shortName}`
+            : `upstream of ${currentShort}`
+        ),
+        mainlines,
+        contained
+      };
+    }
+  }
+
+  // 2. The branch reflog records where the branch was created from.
   for (const line of reflog.split('\n')) {
     const created = line.match(/^branch: Created from (.+)$/);
     if (!created) {
@@ -114,104 +217,78 @@ export async function inferBaseRef(
     }
     const match = findRef(created[1], refs, usable);
     if (match) {
-      return { ref: match.name, label: match.shortName, reason: `created from ${created[1]}` };
+      const picked = preferActive(match, mainlines);
+      return {
+        guess: guessOf(
+          picked.ref,
+          picked.overridden ? `active mainline over stale ${match.shortName}` : `created from ${created[1]}`
+        ),
+        mainlines,
+        contained
+      };
     }
   }
 
-  // 2. A tracking upstream that is not the same-named remote branch.
-  if (currentShort) {
-    const upstream = (await services.runner
-      .run(['rev-parse', '--abbrev-ref', `${currentShort}@{upstream}`], repo.root)
-      .catch(() => ''))
-      .trim();
-    if (upstream) {
-      const match = usable.find((ref) => ref.shortName === upstream || ref.name === `refs/remotes/${upstream}`);
-      if (match) {
-        return { ref: match.name, label: match.shortName, reason: `upstream of ${currentShort}` };
-      }
-    }
-  }
-
-  // 3. The closest branch that is fully contained in the current branch. Prefer mainlines.
-  const mergedNames = (await services.runner
-    .run(['for-each-ref', '--merged', currentRef, '--format=%(refname)', 'refs/heads', 'refs/remotes'], repo.root)
-    .catch(() => ''))
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const merged = mergedNames
-    .map((name) => byName.get(name))
-    .filter((ref): ref is RefInfo => Boolean(ref))
-    .filter((ref) => usable.some((candidate) => candidate.name === ref.name))
-    .filter((ref) => !currentOid || ref.oid !== currentOid)
-    .sort((a, b) => mainlineRank(a) - mainlineRank(b) || b.committerDate - a.committerDate)
-    .slice(0, 20);
-
-  const closestMerged = async (candidates: RefInfo[]): Promise<BaseGuess | undefined> => {
-    let best: { ref: RefInfo; distance: number } | undefined;
-    for (const ref of candidates) {
-      const distance = await count(services, repo, `${ref.name}..${currentRef}`);
-      if (distance === 0) {
-        continue;
-      }
-      if (
-        !best ||
-        distance < best.distance ||
-        (distance === best.distance &&
-          (mainlineRank(ref) < mainlineRank(best.ref) || ref.committerDate > best.ref.committerDate))
-      ) {
-        best = { ref, distance };
-      }
-    }
-    return best
-      ? {
-          ref: best.ref.name,
-          label: best.ref.shortName,
-          reason: 'closest branch fully contained in the current branch'
-        }
-      : undefined;
-  };
-
-  const mergedMainlines = merged.filter(isMainline);
-  const mergedGuess = (await closestMerged(mergedMainlines)) ?? (await closestMerged(merged));
-  if (mergedGuess) {
-    return mergedGuess;
-  }
-
-  // 4. Closest mainline to the merge base (covers branches whose base has moved on).
-  const mainlines = usable
-    .filter(isMainline)
-    .sort((a, b) => mainlineRank(a) - mainlineRank(b) || b.committerDate - a.committerDate)
-    .slice(0, 10);
-
-  let best: { ref: RefInfo; behind: number } | undefined;
-  for (const ref of mainlines) {
-    const mergeBase = (await services.runner
-      .run(['merge-base', currentRef, ref.name], repo.root)
-      .catch(() => ''))
-      .trim()
-      .split('\n')[0];
-    if (!mergeBase) {
-      continue;
-    }
-    const behind = await count(services, repo, `${mergeBase}..${ref.name}`);
-    if (
-      !best ||
-      behind < best.behind ||
-      (behind === best.behind &&
-        (mainlineRank(ref) < mainlineRank(best.ref) || ref.committerDate > best.ref.committerDate))
-    ) {
-      best = { ref, behind };
-    }
-  }
-  if (best) {
+  // 3. The most recently active mainline already contained in this branch.
+  const containedMainline = mainlines.find(
+    (ref) => contained.has(ref.name) && ref.name !== currentRef
+  );
+  if (containedMainline) {
+    const picked = preferActive(containedMainline, mainlines);
     return {
-      ref: best.ref.name,
-      label: best.ref.shortName,
-      reason: 'closest mainline to the merge base'
+      guess: guessOf(
+        picked.ref,
+        picked.overridden
+          ? `active mainline over stale ${containedMainline.shortName}`
+          : 'active mainline contained in the current branch'
+      ),
+      mainlines,
+      contained
     };
   }
 
-  return undefined;
+  // 4. Closest contained non-mainline branch (only a handful of counts).
+  const containedOthers = [...contained]
+    .map((name) => byName.get(name))
+    .filter((ref): ref is RefInfo => Boolean(ref))
+    .filter((ref) => !isMainline(ref) && ref.name !== currentRef && ref.oid !== currentOid)
+    .filter((ref) => usable.some((candidate) => candidate.name === ref.name))
+    .sort((a, b) => b.committerDate - a.committerDate)
+    .slice(0, 5);
+
+  if (containedOthers.length > 0) {
+    const scored = await Promise.all(
+      containedOthers.map(async (ref) => ({ ref, distance: await count(services, repo, `${ref.name}..${currentRef}`) }))
+    );
+    const best = scored
+      .filter((entry) => entry.distance > 0)
+      .sort(
+        (a, b) =>
+          a.distance - b.distance ||
+          b.ref.committerDate - a.ref.committerDate ||
+          mainlineRank(a.ref) - mainlineRank(b.ref)
+      )[0];
+    if (best) {
+      return {
+        guess: guessOf(best.ref, 'closest branch fully contained in the current branch'),
+        mainlines,
+        contained
+      };
+    }
+  }
+
+  // 5. The most active mainline that shares history with the branch.
+  for (const ref of mainlines.slice(0, 3)) {
+    if (ref.name === currentRef) {
+      continue;
+    }
+    const base = await services.runner
+      .run(['merge-base', currentRef, ref.name], repo.root)
+      .catch(() => '');
+    if (base.trim()) {
+      return { guess: guessOf(ref, 'most active mainline'), mainlines, contained };
+    }
+  }
+
+  return { mainlines, contained };
 }

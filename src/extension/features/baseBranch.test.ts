@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RefInfo } from '../../shared/protocol';
-import { branchBaseName, isMainline, mainlineRank } from './baseBranch';
+import { branchBaseName, isMainline, mainlineRank, sortMainlines } from './baseBranch';
 
 function ref(shortName: string, type: RefInfo['type'] = 'local'): RefInfo {
   return {
@@ -45,5 +45,13 @@ describe('mainlineRank', () => {
 
   it('sorts non-mainlines last', () => {
     expect(mainlineRank(ref('feature/x'))).toBeGreaterThan(mainlineRank(ref('release/9.9')));
+  });
+});
+
+describe('sortMainlines', () => {
+  it('puts the most recently updated mainline first, regardless of name rank', () => {
+    const main = { ...ref('main'), committerDate: 200 };
+    const master = { ...ref('master'), committerDate: 100 };
+    expect(sortMainlines([master, main]).map((entry) => entry.shortName)).toEqual(['main', 'master']);
   });
 });

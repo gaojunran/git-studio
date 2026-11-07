@@ -63,16 +63,25 @@ place to learn and one source of truth for repository state.
 Every diff command picks refs through one grouped picker. For the two merge-base commands the first
 entry is an inferred base branch, not `HEAD`:
 
-1. `branch: Created from <ref>` in the branch reflog (strongest signal)
-2. a tracking upstream, unless it is the same-named remote branch
-3. the closest branch fully contained in the current branch (mainlines preferred)
-4. the closest mainline to the merge base (covers a base branch that has moved on)
+1. a tracking upstream, unless it is the same-named remote branch
+2. `branch: Created from <ref>` in the branch reflog
+3. the most recently active mainline already contained in the current branch
+4. the closest branch fully contained in the current branch
+5. the most active mainline that shares history with the branch
+
+Mainlines are ordered by their last commit, not by name, so a stale `master` does not outrank an
+active `main`/`release`. If an upstream or reflog points at a mainline more than 90 days older than
+the newest mainline, the newer one is offered instead (shown as `active mainline over stale master`).
 
 After the inferred base, all local and remote mainlines (`main`, `master`, `develop`, `dev`, `trunk`,
 `next`, `stable`, `release/*`, plus `origin/HEAD`) are listed when the inferred branch is not itself a
 mainline. `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would compare the
 branch with itself), while `Compare Working Tree with Merge Base` keeps `HEAD` after the mainlines
 because it means "only uncommitted changes".
+
+The picker opens immediately and fills in after refs load. Lists are capped (20 mainlines, 40 local,
+40 remote, 20 tags); `Show all refs…` loads the rest on demand. Branches contained in the current
+branch are listed first inside each group, then the most recently updated ones.
 
 ## Settings
 
