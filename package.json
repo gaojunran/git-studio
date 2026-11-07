@@ -170,6 +170,7 @@
     "watch": "concurrently -n ext,web -c blue,green \"node esbuild.mjs --watch\" \"vite build --watch\"",
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "test": "vitest run",
+    "install:local": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out dist/git-studio-$npm_package_version.vsix && code --install-extension dist/git-studio-$npm_package_version.vsix --force",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
