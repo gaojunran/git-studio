@@ -15,10 +15,13 @@ export interface GitRepositoryLike {
   readonly kind?: string;
   readonly state: {
     readonly HEAD?: GitHead;
+    readonly remotes: { readonly name: string; readonly fetchUrl?: string; readonly pushUrl?: string }[];
     readonly onDidChange: vscode.Event<void>;
   };
-  toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
   status(): Promise<void>;
+  checkout(treeish: string): Promise<void>;
+  createBranch(name: string, checkout: boolean, ref?: string): Promise<void>;
+  generateRandomBranchName?(): Promise<string | undefined>;
 }
 
 export interface GitApiLike {
@@ -26,6 +29,7 @@ export interface GitApiLike {
   readonly repositories: GitRepositoryLike[];
   readonly onDidOpenRepository: vscode.Event<GitRepositoryLike>;
   getRepository(uri: vscode.Uri): GitRepositoryLike | undefined;
+  toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
 }
 
 interface GitExtensionLike {
@@ -134,6 +138,13 @@ export class RepoService {
       branch: head?.name ?? null,
       detached: Boolean(head && !head.name)
     };
+  }
+
+  toGitUri(uri: vscode.Uri, ref: string): vscode.Uri {
+    if (!this.api) {
+      throw new Error('Git extension is not available');
+    }
+    return this.api.toGitUri(uri, ref);
   }
 
   relativePath(handle: RepoHandle, uri: vscode.Uri): string | undefined {

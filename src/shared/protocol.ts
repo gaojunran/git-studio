@@ -122,6 +122,7 @@ export type WebviewMessage =
   | { type: 'selectCommit'; hash: string; parentIndex?: number }
   | { type: 'openFileDiff'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'openCommitChanges'; hash: string }
+  | { type: 'commitActions'; hash: string }
   | { type: 'compare'; a: string; b: string }
   | { type: 'openFileHistory'; path: string; hash: string }
   | { type: 'openFileAtRevision'; hash: string; path: string }

@@ -16,6 +16,7 @@ interface Props {
   onSelect: (hash: string) => void;
   onToggleCompare: (hash: string) => void;
   onOpenCommit: (hash: string) => void;
+  onActions: (hash: string) => void;
   onLoadMore: () => void;
 }
 
@@ -153,6 +154,11 @@ export function CommitList(props: Props) {
           }
         }}
         onDoubleClick={() => props.onOpenCommit(row.hash)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          props.onSelect(row.hash);
+          props.onActions(row.hash);
+        }}
         title={`${row.shortHash} · ${row.authorName} · ${row.subject}`}
       >
         <span className="row__main">

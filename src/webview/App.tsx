@@ -276,6 +276,7 @@ export function App() {
           onSelect={select}
           onToggleCompare={toggleCompare}
           onOpenCommit={(hash) => post({ type: 'openCommitChanges', hash })}
+          onActions={(hash) => post({ type: 'commitActions', hash })}
           onLoadMore={() => runQueryRef.current(filters, true)}
         />
         <DetailPane
@@ -300,6 +301,7 @@ export function App() {
           onOpenFileAtRevision={(filePath) => selected && post({ type: 'openFileAtRevision', hash: selected, path: filePath })}
           onOpenChanges={() => selected && post({ type: 'openCommitChanges', hash: selected })}
           onCompare={() => selected && compare && post({ type: 'compare', a: compare, b: selected })}
+          onActions={() => selected && post({ type: 'commitActions', hash: selected })}
           onCopy={(text) => post({ type: 'copy', text })}
         />
       </div>

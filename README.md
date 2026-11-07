@@ -17,6 +17,9 @@ place to learn and one source of truth for repository state.
 - Open a commit as a native multi-file diff; compare any two commits.
 - File history with rename following (`git log --follow`), opened from Explorer, SCM or the editor.
 - Full-file blame annotations with configurable template and clickable commit links.
+- Commit actions from the detail pane or a row right-click:
+  create branch here, create tag here, checkout (detached), compare with working tree,
+  open on GitHub/GitLab/Bitbucket, copy subject or hash.
 - Read-only by default: no history rewriting.
 
 ## Commands
@@ -73,8 +76,9 @@ src/webview/               React history UI (virtual list + SVG graph)
 
 ## Limitations
 
-- Read-only: no reset, revert, cherry-pick or interactive rebase yet.
+- No reset, revert, cherry-pick or interactive rebase yet.
 - Merge commit file lists use the selected parent's diff; rename detection is on.
 - `--all` is the default ref set; repositories with hundreds of refs can take longer on
   a cold disk cache. Switch `gitStudio.history.defaultRefs` to `current` if needed.
 - The built-in Git extension must be enabled for repository discovery.
+- "Open on Remote" supports github.com, gitlab.com (and GitLab-like hosts) and bitbucket.org.

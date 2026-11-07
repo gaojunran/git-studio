@@ -138,6 +138,19 @@ export async function loadCommitFiles(
   return mergeChanges(parseNameStatus(names), parseNumStat(stats));
 }
 
+export async function loadWorktreeFiles(
+  runner: GitRunner,
+  cwd: string,
+  ref: string,
+  signal?: AbortSignal
+): Promise<FileChange[]> {
+  const [names, stats] = await Promise.all([
+    runner.run(['diff', '--name-status', '-z', '-M', '--no-color', ref], cwd, { signal }),
+    runner.run(['diff', '--numstat', '-z', '-M', '--no-color', ref], cwd, { signal })
+  ]);
+  return mergeChanges(parseNameStatus(names), parseNumStat(stats));
+}
+
 export async function loadDiffFiles(
   runner: GitRunner,
   cwd: string,

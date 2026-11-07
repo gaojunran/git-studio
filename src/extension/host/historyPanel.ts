@@ -15,12 +15,13 @@ import { loadDiffFiles } from '../git/diff';
 import { loadCommits, type LogQuery } from '../git/log';
 import { loadRefs } from '../git/refs';
 import { layoutGraph } from '../graph/layout';
+import { CommitActionRunner } from './actions';
 import { renderHtml } from './html';
 import type { RepoHandle } from './repoService';
 import type { Services } from './services';
+import { emptyUri, gitUri as toGitUri } from './uris';
 
 const PAGE_SIZE = 500;
-const EMPTY_SCHEME = 'gitstudio-empty';
 
 interface ShowOptions {
   repo?: RepoHandle;
@@ -79,6 +80,7 @@ export class HistoryPanel {
   private pendingFocus: string | undefined;
   private details = new Map<string, CommitDetail>();
   private readonly parentIndex = new Map<string, number>();
+  private readonly actions: CommitActionRunner;
 
   static async show(services: Services, options: ShowOptions = {}): Promise<HistoryPanel | undefined> {
     if (HistoryPanel.current && !options.repo) {
@@ -123,6 +125,7 @@ export class HistoryPanel {
       this.filters.path = this.filePath;
     }
     this.pendingFocus = options.focus;
+    this.actions = new CommitActionRunner(services, () => this.repo, () => this.refresh());
 
     this.panel.webview.html = renderHtml(panel.webview, services.extensionUri);
     if (this.filePath) {
@@ -151,7 +154,7 @@ export class HistoryPanel {
       this.hasMore = true;
       this.refSignature = '';
       this.details.clear();
-    this.parentIndex.clear();
+      this.parentIndex.clear();
     }
 
     if (options.fileUri) {
@@ -205,6 +208,9 @@ export class HistoryPanel {
           break;
         case 'openCommitChanges':
           await this.openCommitChanges(message.hash);
+          break;
+        case 'commitActions':
+          await this.actions.show(message.hash, await this.detailFor(message.hash));
           break;
         case 'compare':
           await this.compare(message.a, message.b);
@@ -396,21 +402,17 @@ export class HistoryPanel {
     }
   }
 
-  private emptyUri(filePath: string): vscode.Uri {
-    return vscode.Uri.from({ scheme: EMPTY_SCHEME, path: `/${filePath}` });
-  }
-
   private gitUri(filePath: string, ref: string): vscode.Uri {
-    return this.repo.repo.toGitUri(vscode.Uri.joinPath(this.repo.repo.rootUri, filePath), ref);
+    return toGitUri(this.services, this.repo, filePath, ref);
   }
 
   private fileUris(file: FileChange, hash: string, parent: string | undefined): [vscode.Uri, vscode.Uri, vscode.Uri] {
     const oldPath = file.oldPath ?? file.path;
     const left = file.status === 'A' || !parent
-      ? this.emptyUri(oldPath)
+      ? emptyUri(oldPath)
       : this.gitUri(oldPath, parent);
     const right = file.status === 'D'
-      ? this.emptyUri(file.path)
+      ? emptyUri(file.path)
       : this.gitUri(file.path, hash);
     return [vscode.Uri.joinPath(this.repo.repo.rootUri, file.path), left, right];
   }
@@ -466,8 +468,8 @@ export class HistoryPanel {
     const entries = files.map((file): [vscode.Uri, vscode.Uri, vscode.Uri] => {
       const uri = vscode.Uri.joinPath(this.repo.repo.rootUri, file.path);
       const oldPath = file.oldPath ?? file.path;
-      const left = file.status === 'A' ? this.emptyUri(oldPath) : this.gitUri(oldPath, a);
-      const right = file.status === 'D' ? this.emptyUri(file.path) : this.gitUri(file.path, b);
+      const left = file.status === 'A' ? emptyUri(oldPath) : this.gitUri(oldPath, a);
+      const right = file.status === 'D' ? emptyUri(file.path) : this.gitUri(file.path, b);
       return [uri, left, right];
     });
 

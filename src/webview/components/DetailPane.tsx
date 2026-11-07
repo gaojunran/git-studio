@@ -15,6 +15,7 @@ interface Props {
   onOpenFileAtRevision: (filePath: string) => void;
   onOpenChanges: () => void;
   onCompare: () => void;
+  onActions: () => void;
   onCopy: (text: string) => void;
 }
 
@@ -228,6 +229,9 @@ export function DetailPane(props: Props) {
           title={compare ? `Compare ${compare.slice(0, 8)} with ${selected.slice(0, 8)}` : 'Ctrl/Cmd-click a commit to set the compare base'}
         >
           {compare && compare !== selected ? `Compare ${compare.slice(0, 7)} ↔ ${selected.slice(0, 7)}` : 'Compare'}
+        </button>
+        <button className="btn btn--actions" onClick={props.onActions} title="More commit actions">
+          ⋯
         </button>
       </div>
     </div>

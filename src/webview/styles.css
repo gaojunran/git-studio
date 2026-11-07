@@ -684,3 +684,7 @@ select.input {
 .detail {
   background: var(--vscode-editor-background);
 }
+.btn--actions {
+  flex: 0 0 32px;
+  padding: 0;
+}
