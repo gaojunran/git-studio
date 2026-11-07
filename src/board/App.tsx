@@ -756,11 +756,22 @@ export function App() {
   const detailKey = useRef<string | null>(null);
   const labelsRequest = useRef(0);
   const reviewersRequest = useRef(0);
+  const activeProvider = useRef<string | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const off = onMessage((message) => {
       if (message.type === 'state') {
+        if (activeProvider.current !== message.providerId) {
+          activeProvider.current = message.providerId;
+          setItems([]);
+          setSelected(null);
+          setDetail(null);
+          setHasMore(false);
+          if (message.repo && !message.repo.kinds.includes(kind)) {
+            setKind(message.repo.kinds[0] ?? 'issue');
+          }
+        }
         setRepo(message.repo);
         setProviders(message.providers);
         setProviderId(message.providerId);
@@ -907,7 +918,11 @@ export function App() {
         <span className="masthead__title">Issues and PRs</span>
         <div className="masthead__actions">
           {providers.length > 1 ? (
-            <select className="select select--sm" value={providerId ?? ''} onChange={() => undefined} disabled>
+            <select
+              className="select select--sm"
+              value={providerId ?? ''}
+              onChange={(event) => post({ type: 'selectProvider', providerId: event.target.value })}
+            >
               {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
             </select>
           ) : (

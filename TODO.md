@@ -37,7 +37,8 @@
 - [ ] Board UI 与 OpenChamber 逐像素对齐
 - [ ] Tracker / Linear tab
 - [x] Git URL 安装与更新（folder 安装保留）
-- [ ] zip / VSIX 安装
+- [x] zip / VSIX 安装
+- [x] 多个集成 provider 在 Board 头部切换
 - [ ] 内置 provider 扩展：GitLab / Gitea / Forgejo / Gerrit
 
 ### 1. Stash 工作台

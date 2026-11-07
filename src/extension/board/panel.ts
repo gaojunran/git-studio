@@ -98,6 +98,7 @@ export class BoardPanel {
   private repoInfo: BoardRepoInfo | null = null;
   private providers: BoardProviderInfo[] = [];
   private providerId: string | null = null;
+  private preferredProviderId: string | null = null;
   private authenticated = false;
   private ready = false;
   private busy = false;
@@ -243,6 +244,11 @@ export class BoardPanel {
       case 'connectProvider':
         await this.connectProvider(message.providerId);
         return;
+      case 'selectProvider':
+        this.preferredProviderId = message.providerId;
+        await this.refreshState();
+        await this.reload();
+        return;
       case 'connectGithub':
         await this.connectGithub();
         return;
@@ -327,10 +333,12 @@ export class BoardPanel {
       });
     }
 
-    if (guestMatches.length > 0) {
-      const { record, repo } = guestMatches[0];
-      this.repoInfo = { ...repo, root: this.repo?.root ?? '' };
+    if (guestMatches.length > 0 && this.preferredProviderId !== 'github') {
+      const preferred = guestMatches.find((entry) => `ext-${entry.record.id}` === this.preferredProviderId);
+      const { record, repo } = preferred ?? guestMatches[0];
       this.providerId = `ext-${record.id}`;
+      this.preferredProviderId = this.providerId;
+      this.repoInfo = { ...repo, root: this.repo?.root ?? '' };
       const credential = await this.board.guestService.credential(record);
       if (credential) {
         this.provider = new GuestProvider(record, this.board.guestService, this.repoInfo);
@@ -343,6 +351,9 @@ export class BoardPanel {
     if (!github) {
       return;
     }
+
+    this.providerId = 'github';
+    this.preferredProviderId = 'github';
 
     const token = await this.secrets.get(TOKEN_KEY);
     if (!token) {

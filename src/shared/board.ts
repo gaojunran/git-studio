@@ -162,6 +162,7 @@ export type BoardWebviewMessage =
   | { type: 'copy'; text: string }
   | { type: 'connectGithub' }
   | { type: 'connectProvider'; providerId: string }
+  | { type: 'selectProvider'; providerId: string }
   | { type: 'listLabels'; requestId: number }
   | { type: 'listReviewers'; requestId: number }
   | { type: 'setLabels'; number: number; names: string[] }

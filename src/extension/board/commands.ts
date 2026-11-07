@@ -156,6 +156,75 @@ export async function installIntegrationFromGit(
   }
 }
 
+export async function installIntegrationFromArchive(board: BoardContext, options: { archive?: string; instance?: string; token?: string; login?: string } = {}): Promise<void> {
+  const picked = options.archive
+    ? [vscode.Uri.file(options.archive)]
+    : await vscode.window.showOpenDialog({
+      canSelectFolders: false,
+      canSelectFiles: true,
+      canSelectMany: false,
+      filters: { Archives: ['zip', 'vsix'] },
+      openLabel: 'Install integration'
+    });
+  const archive = picked?.[0];
+  if (!archive) {
+    return;
+  }
+
+  const hash = createHash('sha1').update(archive.fsPath).digest('hex').slice(0, 12);
+  const target = path.join(board.storage.fsPath, 'guests', hash);
+  try {
+    await rm(target, { recursive: true, force: true });
+    await mkdir(target, { recursive: true, mode: 0o700 });
+    await execFileAsync('unzip', ['-q', archive.fsPath, '-d', target], { timeout: 120_000 });
+    let manifest: Awaited<ReturnType<typeof readGuestManifest>> | undefined;
+    let manifestError: unknown;
+    for (const root of [target, path.join(target, 'extension')]) {
+      try {
+        manifest = await readGuestManifest(root);
+        break;
+      } catch (error) {
+        manifestError = error;
+      }
+    }
+    if (!manifest) {
+      throw manifestError;
+    }
+    const instance = options.instance ?? await pickInstance(manifest.descriptor);
+    if (!instance) {
+      return;
+    }
+    const record: GuestRecord = {
+      id: manifest.id,
+      name: manifest.name,
+      packageRoot: manifest.packageRoot,
+      entry: manifest.entry,
+      version: manifest.version,
+      instance: instanceAllowed(instance, manifest.descriptor),
+      descriptor: manifest.descriptor,
+      source: { kind: 'archive', url: archive.fsPath }
+    };
+    await board.guests.add(record);
+    if (options.token) {
+      await board.guestService.connect(record, options.token, options.login);
+      void vscode.window.showInformationMessage(`Git Studio: installed and connected ${manifest.name}.`);
+    } else {
+      const connect = await vscode.window.showInformationMessage(
+        `Git Studio: installed ${manifest.name}. Connect an account now?`,
+        'Connect',
+        'Later'
+      );
+      if (connect === 'Connect') {
+        await connectIntegration(board);
+      }
+    }
+    await BoardPanel.refreshCurrent();
+  } catch (error) {
+    await rm(target, { recursive: true, force: true });
+    void vscode.window.showErrorMessage(`Git Studio: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export async function updateIntegration(board: BoardContext): Promise<void> {
   const guests = board.guests.list().filter((guest) => guest.source?.kind === 'git');
   if (guests.length === 0) {

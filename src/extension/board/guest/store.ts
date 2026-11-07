@@ -9,7 +9,7 @@ export interface GuestRecord {
   version: string;
   instance: string;
   descriptor: GuestManifest['descriptor'];
-  source?: { kind: 'folder' | 'git'; url?: string };
+  source?: { kind: 'folder' | 'git' | 'archive'; url?: string };
 }
 
 const KEY = 'gitStudio.board.guests.v1';

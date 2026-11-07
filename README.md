@@ -64,6 +64,7 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Connect GitHub for Board` | Store a GitHub token for the board. |
 | `Git Studio: Install Integration Extension…` | Install a folder containing an OpenChamber source-control integration package. |
 | `Git Studio: Install Integration Extension from Git…` | Clone a Git repository and install the integration package in it. |
+| `Git Studio: Install Integration Extension from Archive…` | Install a `.zip` or `.vsix` containing an OpenChamber source-control integration package. |
 | `Git Studio: Update Integration Extension…` | Pull a Git-installed integration and reload its manifest. |
 | `Git Studio: Connect Integration Account…` | Connect a token to an installed integration. |
 | `Git Studio: Remove Integration Extension…` | Forget an installed integration and its token. |
@@ -116,9 +117,10 @@ other hosts come from OpenChamber source-control integration packages.
   SecretStorage. The package never sees the token; its forge calls go through Git Studio's outbound
   callback with a per-call handle.
 
-Integration packages are installed from a folder or a Git URL with **Git Studio: Install Integration Extension…** /
-**Install Integration Extension from Git…**. A Git-installed package can be updated with
-**Update Integration Extension…**, which pulls and reloads its manifest.
+Integration packages are installed from a folder, a Git URL or a `.zip` / `.vsix` archive with **Git Studio: Install Integration Extension…**,
+**Install Integration Extension from Git…** or **Install Integration Extension from Archive…**. A Git-installed package can be updated with
+**Update Integration Extension…**, which pulls and reloads its manifest. When more than one provider matches a repository,
+the provider selector in the board header switches between them.
 The first version supports the `source-control` role's reads plus comment, state, merge, labels,
 reviewers and review writes when the manifest declares those capabilities. Tracker packages,
 chat-session actions and worktree creation are out of scope for this version.

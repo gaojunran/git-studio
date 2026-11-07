@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.13.2",
+  "version": "0.14.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -51,6 +51,11 @@
       {
         "command": "gitStudio.boardInstallIntegrationFromGit",
         "title": "Install Integration Extension from Git…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.boardInstallIntegrationFromArchive",
+        "title": "Install Integration Extension from Archive…",
         "category": "Git Studio"
       },
       {
