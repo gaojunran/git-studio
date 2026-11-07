@@ -4,7 +4,7 @@ import { loadRefs } from '../git/refs';
 import { resolveCommit } from '../git/revision';
 import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
-import { inferBaseRef, isMainline, type BaseInference } from './baseBranch';
+import { inferBaseRef, type BaseInference } from './baseBranch';
 
 interface RefItem extends vscode.QuickPickItem {
   value?: string;
@@ -211,11 +211,7 @@ function buildItems(
       used.add(guess.ref);
     }
 
-    const guessedRef = guess ? byName.get(guess.ref) : undefined;
-    const inferredIsMainline = guessedRef ? isMainline(guessedRef) : false;
-    if (!inferredIsMainline) {
-      addGroup('Mainlines', inference.mainlines, 'mainline');
-    }
+    addGroup('Mainlines', inference.mainlines, 'mainline');
 
     if (options.includeHead !== false) {
       items.push(headItem);

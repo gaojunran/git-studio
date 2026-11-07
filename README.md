@@ -73,11 +73,11 @@ Mainlines are ordered by their last commit, not by name, so a stale `master` doe
 active `main`/`release`. If an upstream or reflog points at a mainline more than 90 days older than
 the newest mainline, the newer one is offered instead (shown as `active mainline over stale master`).
 
-After the inferred base, all local and remote mainlines (`main`, `master`, `develop`, `dev`, `trunk`,
-`next`, `stable`, `release/*`, plus `origin/HEAD`) are listed when the inferred branch is not itself a
-mainline. `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would compare the
-branch with itself), while `Compare Working Tree with Merge Base` keeps `HEAD` after the mainlines
-because it means "only uncommitted changes".
+After the inferred base, the other local and remote mainlines (`main`, `master`, `develop`, `dev`,
+`trunk`, `next`, `stable`, `release/*`, plus `origin/HEAD`) are listed; the inferred one is excluded
+from that group. `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would
+compare the branch with itself), while `Compare Working Tree with Merge Base` keeps `HEAD` after the
+mainlines because it means "only uncommitted changes".
 
 The picker opens immediately and fills in after refs load. Lists are capped (20 mainlines, 40 local,
 40 remote, 20 tags); `Show all refs…` loads the rest on demand. Branches contained in the current
