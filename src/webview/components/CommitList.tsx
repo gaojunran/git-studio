@@ -61,6 +61,8 @@ export function CommitList(props: Props) {
   const [height, setHeight] = useState(600);
   const frameRef = useRef(0);
   const scrolledForRef = useRef<string | null>(null);
+  const loadMoreRef = useRef(props.onLoadMore);
+  loadMoreRef.current = props.onLoadMore;
 
   useEffect(() => {
     const element = containerRef.current;
@@ -72,6 +74,16 @@ export function CommitList(props: Props) {
     setHeight(element.clientHeight);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || rows.length === 0 || !hasMore || loading) {
+      return;
+    }
+    if (element.scrollHeight <= element.clientHeight + 1) {
+      loadMoreRef.current();
+    }
+  }, [rows.length, hasMore, loading]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -214,6 +226,13 @@ export function CommitList(props: Props) {
 
       {rows.length === 0 && !loading && (
         <div className="list__empty">No commits match the current filters.</div>
+      )}
+      {hasMore && !loading && (
+        <div className="list__more">
+          <button className="btn btn--small" onClick={() => loadMoreRef.current()}>
+            Load more
+          </button>
+        </div>
       )}
       {loading && <div className="list__status">Loading…</div>}
       {!loading && !hasMore && rows.length > 0 && <div className="list__status">End of history</div>}

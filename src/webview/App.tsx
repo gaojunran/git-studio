@@ -96,6 +96,13 @@ export function App() {
           setGraph(message.graph);
           setHasMore(message.hasMore);
           setStale(message.stale);
+          if (message.append && message.rows.length === 0 && message.hasMore) {
+            setTimeout(() => {
+              if (filtersRef.current) {
+                runQueryRef.current(filtersRef.current, true);
+              }
+            }, 0);
+          }
           break;
         }
         case 'detail': {

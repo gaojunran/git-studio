@@ -689,3 +689,8 @@ select.input {
   flex: 0 0 32px;
   padding: 0;
 }
+.list__more {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 10px;
+}

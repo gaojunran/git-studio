@@ -75,8 +75,10 @@ export class HistoryPanel {
   private filePath: string | undefined;
   private refs: RefInfo[] = [];
   private rows: CommitRow[] = [];
+  private rowHashes = new Set<string>();
   private graph: GraphRow[] = [];
   private hasMore = true;
+  private consumed = 0;
   private refSignature = '';
   private lastRefsAt = 0;
   private refsInitialized = false;
@@ -161,9 +163,11 @@ export class HistoryPanel {
       this.filters = emptyFilters();
       this.refsInitialized = false;
       this.refsSource = 'default';
+      this.consumed = 0;
       this.filePath = undefined;
       this.refs = [];
       this.rows = [];
+      this.rowHashes.clear();
       this.graph = [];
       this.hasMore = true;
       this.refSignature = '';
@@ -294,6 +298,7 @@ export class HistoryPanel {
       this.abort = new AbortController();
       this.token += 1;
       this.rows = [];
+      this.rowHashes.clear();
       this.graph = [];
       this.hasMore = true;
       this.filters = { ...message.filters };
@@ -313,7 +318,7 @@ export class HistoryPanel {
 
     const token = this.token;
     const signal = this.abort?.signal;
-    const skip = Math.max(0, message.skip);
+    const skip = message.append ? this.consumed : 0;
     const limit = Math.max(1, Math.min(5000, message.limit));
 
     this.post({ type: 'busy', busy: true });
@@ -342,12 +347,21 @@ export class HistoryPanel {
       }
 
       const incoming = message.append
-        ? result.rows.filter((row) => !this.rows.some((existing) => existing.hash === row.hash))
+        ? result.rows.filter((row) => !this.rowHashes.has(row.hash))
         : result.rows;
 
-      this.rows = message.append ? [...this.rows, ...incoming] : incoming;
+      if (message.append) {
+        for (const row of incoming) {
+          this.rowHashes.add(row.hash);
+        }
+        this.rows = [...this.rows, ...incoming];
+      } else {
+        this.rows = incoming;
+        this.rowHashes = new Set(incoming.map((row) => row.hash));
+      }
       this.graph = layoutGraph(this.rows);
-      this.hasMore = result.hasMore;
+      this.hasMore = result.hasMore && result.rows.length > 0;
+      this.consumed = message.append ? this.consumed + result.rows.length : result.rows.length;
 
       this.post({
         type: 'commits',
@@ -514,6 +528,7 @@ export class HistoryPanel {
 
   private openFileHistory(filePath: string): void {
     this.filePath = filePath;
+    this.consumed = 0;
     this.filters = {
       ...this.filters,
       path: filePath,
@@ -522,6 +537,7 @@ export class HistoryPanel {
     };
     this.refSignature = '';
     this.rows = [];
+    this.rowHashes.clear();
     this.graph = [];
     this.hasMore = true;
     this.panel.title = `History: ${path.basename(filePath)}`;
@@ -624,8 +640,10 @@ export class HistoryPanel {
     this.filters = emptyFilters();
     this.refsInitialized = false;
     this.refsSource = 'default';
+    this.consumed = 0;
     this.filePath = undefined;
     this.rows = [];
+    this.rowHashes.clear();
     this.graph = [];
     this.hasMore = true;
     this.refSignature = '';
@@ -642,9 +660,11 @@ export class HistoryPanel {
 
   async refresh(): Promise<void> {
     this.lastRefreshAt = Date.now();
+    this.consumed = 0;
     this.abort?.abort();
     this.token += 1;
     this.rows = [];
+    this.rowHashes.clear();
     this.graph = [];
     this.hasMore = true;
     this.refSignature = '';
