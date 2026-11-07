@@ -73,27 +73,101 @@ export async function compareRefs(
   await openRefDiff(services, repo, left, right, `${shortRef(left)} ↔ ${shortRef(right)}`);
 }
 
-export async function compareMergeBase(services: Services, uri?: vscode.Uri, refOverride?: string): Promise<void> {
+interface CurrentRef {
+  ref: string;
+  label: string;
+  detached: boolean;
+}
+
+async function resolveCurrentBranch(services: Services, repo: RepoHandle): Promise<CurrentRef | undefined> {
+  const name = (await services.runner
+    .run(['symbolic-ref', '--short', '-q', 'HEAD'], repo.root)
+    .catch(() => ''))
+    .trim();
+  if (name) {
+    return { ref: `refs/heads/${name}`, label: name, detached: false };
+  }
+
+  const shortHead = (await services.runner.run(['rev-parse', '--short', 'HEAD'], repo.root).catch(() => '')).trim() || 'HEAD';
+  const branches = (await services.runner
+    .run(['branch', '--contains', 'HEAD', '--format=%(refname:short)'], repo.root)
+    .catch(() => ''))
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('('));
+
+  if (branches.length === 1) {
+    return { ref: `refs/heads/${branches[0]}`, label: `${branches[0]} (detached)`, detached: true };
+  }
+
+  if (branches.length === 0) {
+    return { ref: 'HEAD', label: `HEAD (${shortHead})`, detached: true };
+  }
+
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: `Detached HEAD (${shortHead})`, description: 'compare the commit itself', value: 'HEAD' },
+      ...branches.map((branch) => ({
+        label: branch,
+        description: 'branch containing HEAD',
+        value: `refs/heads/${branch}`
+      }))
+    ],
+    { placeHolder: 'Detached HEAD — which branch represents the current state?' }
+  );
+  if (!picked) {
+    return undefined;
+  }
+  return picked.value === 'HEAD'
+    ? { ref: 'HEAD', label: `HEAD (${shortHead})`, detached: true }
+    : { ref: picked.value, label: `${shortRef(picked.value)} (detached)`, detached: true };
+}
+
+export async function compareMergeBase(
+  services: Services,
+  uri?: vscode.Uri,
+  refOverride?: string,
+  currentOverride?: string
+): Promise<void> {
   const repo = await repoFor(services, uri);
   if (!repo) {
     return;
   }
 
-  const ref = refOverride ?? await pickRef(services, repo, { placeHolder: 'Compare current branch against…' });
+  const current = currentOverride
+    ? { ref: currentOverride, label: shortRef(currentOverride), detached: currentOverride === 'HEAD' }
+    : await resolveCurrentBranch(services, repo);
+  if (!current) {
+    return;
+  }
+
+  const ref = refOverride ?? await pickRef(services, repo, { placeHolder: `Compare ${current.label} against…` });
   if (!ref) {
+    return;
+  }
+  if (ref === current.ref) {
+    void vscode.window.showInformationMessage('Git Studio: pick a different ref to compare against.');
     return;
   }
 
   const base = await services.runner
-    .run(['merge-base', 'HEAD', ref], repo.root)
+    .run(['merge-base', current.ref, ref], repo.root)
     .then((output) => output.trim().split('\n')[0] ?? '')
     .catch(() => '');
   if (!base) {
-    void vscode.window.showInformationMessage(`Git Studio: ${shortRef(ref)} has no common ancestor with HEAD.`);
+    void vscode.window.showInformationMessage(
+      `Git Studio: ${current.label} has no common ancestor with ${shortRef(ref)}.`
+    );
     return;
   }
 
-  await openRefDiff(services, repo, base, 'HEAD', `Branch changes vs merge-base(${shortRef(ref)})`);
+  await openRefDiff(
+    services,
+    repo,
+    base,
+    current.ref,
+    `Changes on ${current.label} since merge-base(${shortRef(ref)})`
+  );
 }
 
 export async function compareStash(services: Services, uri?: vscode.Uri, stashOverride?: string): Promise<void> {

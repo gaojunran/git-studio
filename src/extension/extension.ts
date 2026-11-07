@@ -27,6 +27,7 @@ interface CompareArg {
   right?: string;
   ref?: string;
   stash?: string;
+  current?: string;
 }
 
 function splitCompareArg(arg: unknown): { uri?: vscode.Uri; options: CompareArg } {
@@ -170,7 +171,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('gitStudio.diffMergeBase', async (arg?: unknown) => {
       const { uri, options } = splitCompareArg(arg);
-      await compareMergeBase(services, uri, options.ref);
+      await compareMergeBase(services, uri, options.ref, options.current);
     }),
 
     vscode.commands.registerCommand('gitStudio.diffStash', async (arg?: unknown) => {

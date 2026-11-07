@@ -21,6 +21,8 @@ place to learn and one source of truth for repository state.
   and editor context). The working-tree side of the diff is a real file URI, so it stays editable;
   untracked files are included as additions.
 - More diff commands: two refs, merge-base, stash, one file at two revisions, a folder, and unpushed commits.
+- Detached HEAD (jj workflows) is handled: the merge-base command resolves the only branch containing
+  HEAD, and asks when several branches match instead of failing.
 - Commit actions from the detail pane or a row right-click:
   create branch here, create tag here, checkout (detached), compare with working tree,
   open on GitHub/GitLab/Bitbucket, copy subject or hash.
@@ -46,7 +48,7 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Undo Last Rewrite` | Reset back to the state recorded before the last rewrite. |
 | `Git Studio: Compare Working Tree with…` | Pick a branch, tag or commit and open an editable multi-file diff. |
 | `Git Studio: Compare Two Refs…` | Diff any two branches, tags or commits. |
-| `Git Studio: Compare Current Branch with Merge Base…` | Show only the changes made on the current branch since it diverged. |
+| `Git Studio: Compare Current Branch with Merge Base…` | Show only the changes made on the current branch since it diverged. In detached HEAD it uses the only branch containing HEAD, otherwise asks which branch (or HEAD itself) to use. |
 | `Git Studio: Compare Stash…` | Diff a stash against its parent commit. |
 | `Git Studio: Compare File at Two Revisions…` | Diff one file between any two revisions. |
 | `Git Studio: Compare Folder with Working Tree…` | Diff a folder against a ref; the working-tree side stays editable. |
