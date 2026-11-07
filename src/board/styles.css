@@ -1199,6 +1199,61 @@ svg {
   color: var(--muted-dim);
 }
 
+.votes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.votes__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.votes__label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted-dim);
+}
+
+.votes__values {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.votes__value {
+  min-width: 26px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.votes__value--active {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+}
+
+.votes__cast {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted-dim);
+}
+
 .detail__footerbar {
   display: flex;
   align-items: center;

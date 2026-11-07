@@ -452,6 +452,7 @@ function DetailPane({
   onSetLabels,
   onSetReviewers,
   onReview,
+  onVote,
   onOpen,
   onCopy
 }: {
@@ -468,10 +469,12 @@ function DetailPane({
   onSetLabels: (names: string[]) => void;
   onSetReviewers: (names: string[]) => void;
   onReview: (verdict: 'approve' | 'request-changes') => void;
+  onVote: (votes: Record<string, number>) => void;
   onOpen: (url: string) => void;
   onCopy: (text: string) => void;
 }) {
   const [draft, setDraft] = useState('');
+  const [votes, setVotes] = useState<Record<string, number>>({});
 
   if (loading && !detail) {
     return <div className="detail detail--empty">Loading…</div>;
@@ -487,6 +490,7 @@ function DetailPane({
   const addableLabels = labelOptions?.filter((label) => !labelNames.has(label.name)) ?? [];
   const reviewerLogins = new Set(reviewers.map((reviewer) => reviewer.login.toLowerCase()));
   const addableReviewers = reviewerOptions?.filter((reviewer) => !reviewerLogins.has(reviewer.login.toLowerCase())) ?? [];
+  const voteLabels = (detail.voteLabels ?? []).filter((label) => label.permitted.length > 0);
 
   return (
     <div className="detail">
@@ -699,7 +703,52 @@ function DetailPane({
                 ) : null}
                 {detail.canReview ? (
                   detail.reviewModel === 'votes' ? (
-                    <span className="detail__note">Votes are not supported yet.</span>
+                    <div className="votes">
+                      {voteLabels.length === 0 ? (
+                        <span className="detail__note">No vote labels available.</span>
+                      ) : (
+                        voteLabels.map((label) => (
+                          <div className="votes__row" key={label.name}>
+                            <span className="votes__label" title={label.name}>{label.name}</span>
+                            <span className="votes__values">
+                              {[...label.permitted].sort((left, right) => left - right).map((value) => {
+                                const description = label.values.find((entry) => entry.value === value)?.description;
+                                return (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    className={`votes__value${votes[label.name] === value ? ' votes__value--active' : ''}`}
+                                    title={description ?? undefined}
+                                    aria-pressed={votes[label.name] === value}
+                                    disabled={busy}
+                                    onClick={() => setVotes((current) => {
+                                      const next = { ...current };
+                                      if (next[label.name] === value) delete next[label.name];
+                                      else next[label.name] = value;
+                                      return next;
+                                    })}
+                                  >
+                                    {value > 0 ? `+${value}` : value}
+                                  </button>
+                                );
+                              })}
+                            </span>
+                            {label.votes.filter((vote) => vote.value !== 0).length > 0 ? (
+                              <span className="votes__cast">
+                                {label.votes.filter((vote) => vote.value !== 0).map((vote) => `${vote.user.login} ${vote.value > 0 ? '+' : ''}${vote.value}`).join(', ')}
+                              </span>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                      <button
+                        className="btn btn--primary"
+                        disabled={busy || Object.keys(votes).length === 0}
+                        onClick={() => { onVote(votes); setVotes({}); }}
+                      >
+                        Vote
+                      </button>
+                    </div>
                   ) : (
                     <>
                       <button className="btn btn--approve" disabled={busy} onClick={() => onReview('approve')}>Approve</button>
@@ -1080,6 +1129,10 @@ export function App() {
                 onReview={(verdict) => {
                   if (selected == null) return;
                   post({ type: 'review', number: selected, verdict });
+                }}
+                onVote={(votes) => {
+                  if (selected == null) return;
+                  post({ type: 'review', number: selected, votes });
                 }}
                 onOpen={(url) => post({ type: 'openExternal', url })}
                 onCopy={(text) => post({ type: 'copy', text })}

@@ -32,7 +32,7 @@
 - [x] 第一版 Guest Host：folder 安装、manifest 解析、service spawn、loopback 代理、outbound callback、SecretStorage token
 - [x] 零修改验证：Teahouse 示例插件在真实 VS Code 中启动并列出 issue/PR
 - [x] Guest Host 写操作：comment / close / merge / labels / reviewers / review
-- [ ] Guest Host 写操作：votes 评审模型
+- [x] Guest Host 写操作：votes 评审模型
 - [ ] Guest Host 写操作：review threads
 - [ ] Board UI 与 OpenChamber 逐像素对齐
 - [ ] Tracker / Linear tab

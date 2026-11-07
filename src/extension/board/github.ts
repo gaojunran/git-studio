@@ -28,6 +28,7 @@ export interface BoardProvider {
   setLabels?(number: number, names: string[]): Promise<void>;
   setReviewers?(number: number, names: string[]): Promise<void>;
   review?(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void>;
+  reviewVotes?(number: number, votes: Record<string, number>, body?: string): Promise<void>;
 }
 
 export interface GitHubRepo {

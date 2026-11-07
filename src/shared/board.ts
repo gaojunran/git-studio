@@ -30,6 +30,21 @@ export interface BoardItemSummary {
   category?: string | null;
 }
 
+export interface BoardVoteValue {
+  value: number;
+  description?: string | null;
+}
+
+export interface BoardVoteLabel {
+  name: string;
+  values: BoardVoteValue[];
+  defaultValue: number;
+  permitted: number[];
+  blocking: boolean;
+  status: 'approved' | 'rejected' | 'recommended' | 'disliked' | 'neutral';
+  votes: Array<{ user: BoardAuthor; value: number }>;
+}
+
 export interface BoardComment {
   id: string;
   author: BoardAuthor | null;
@@ -55,6 +70,7 @@ export interface BoardItemDetail extends BoardItemSummary {
   canEditReviewers?: boolean;
   canReview?: boolean;
   reviewModel?: 'verdict' | 'votes';
+  voteLabels?: BoardVoteLabel[];
   canComment: boolean;
   canClose: boolean;
   canReopen: boolean;
@@ -167,5 +183,5 @@ export type BoardWebviewMessage =
   | { type: 'listReviewers'; requestId: number }
   | { type: 'setLabels'; number: number; names: string[] }
   | { type: 'setReviewers'; number: number; names: string[] }
-  | { type: 'review'; number: number; verdict: 'approve' | 'request-changes'; body?: string }
+  | { type: 'review'; number: number; verdict?: 'approve' | 'request-changes'; votes?: Record<string, number>; body?: string }
   | { type: 'openSettings' };

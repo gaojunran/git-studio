@@ -78,6 +78,17 @@ interface ScList<T> {
 interface ScContext {
   changeRequest?: ScChangeRequest | null;
   issueComments?: ScComment[];
+  voteLabels?: ScVoteLabel[];
+}
+
+interface ScVoteLabel {
+  name: string;
+  values?: Array<{ value: number; description?: string | null }>;
+  defaultValue?: number;
+  permitted?: number[];
+  blocking?: boolean;
+  status?: 'approved' | 'rejected' | 'recommended' | 'disliked' | 'neutral';
+  votes?: Array<{ user?: ScUser | null; value: number }>;
 }
 
 function avatarOf(value: string | null | undefined): string | null {
@@ -344,6 +355,18 @@ export class GuestProvider implements BoardProvider {
       canEditReviewers: capabilities.reviewers === true,
       canReview: capabilities.reviews === true,
       reviewModel: capabilities.reviewModel ?? 'verdict',
+      voteLabels: (context.voteLabels ?? []).map((label) => ({
+        name: label.name,
+        values: (label.values ?? []).map((entry) => ({ value: entry.value, description: entry.description ?? null })),
+        defaultValue: label.defaultValue ?? 0,
+        permitted: label.permitted ?? [],
+        blocking: label.blocking ?? false,
+        status: label.status ?? 'neutral',
+        votes: (label.votes ?? []).flatMap((vote) => {
+          const user = loginOf(vote.user);
+          return user ? [{ user, value: vote.value }] : [];
+        })
+      })),
       canComment: capabilities.comments === true,
       canClose: capabilities.state === true && pull.state === 'open',
       canReopen: capabilities.state === true && pull.state === 'closed',
@@ -429,6 +452,16 @@ export class GuestProvider implements BoardProvider {
       this.record,
       'change-request-review',
       body ? { verdict, body } : { verdict },
+      this.mutationContext({ number }),
+      '/pr/review'
+    );
+  }
+
+  async reviewVotes(number: number, votes: Record<string, number>, body?: string): Promise<void> {
+    await this.service.mutate(
+      this.record,
+      'change-request-review',
+      body ? { votes, body } : { votes },
       this.mutationContext({ number }),
       '/pr/review'
     );

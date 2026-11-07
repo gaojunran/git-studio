@@ -229,9 +229,17 @@ export class BoardPanel {
         });
         return;
       case 'review':
+        if (message.votes) {
+          await this.mutate('Voting', () => {
+            const provider = this.requireProvider();
+            if (!provider.reviewVotes) throw new Error('This provider cannot vote on change requests.');
+            return provider.reviewVotes(message.number, message.votes!, message.body);
+          });
+          return;
+        }
         await this.mutate(message.verdict === 'approve' ? 'Approving' : 'Requesting changes', () => {
           const provider = this.requireProvider();
-          if (!provider.review) throw new Error('This provider cannot review change requests.');
+          if (!provider.review || !message.verdict) throw new Error('This provider cannot review change requests.');
           return provider.review(message.number, message.verdict, message.body);
         });
         return;
