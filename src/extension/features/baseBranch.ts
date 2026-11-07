@@ -106,11 +106,14 @@ function preferActive(candidate: RefInfo, mainlines: RefInfo[]): { ref: RefInfo;
     return { ref: candidate, overridden: false };
   }
   const newest = mainlines[0];
-  if (
-    newest &&
-    newest.name !== candidate.name &&
-    newest.committerDate - candidate.committerDate > STALE_SECONDS
-  ) {
+  if (!newest || newest.name === candidate.name) {
+    return { ref: candidate, overridden: false };
+  }
+  // When remote HEADs define the mainlines, any other mainline is a stale copy.
+  if (!mainlines.some((ref) => ref.name === candidate.name)) {
+    return { ref: newest, overridden: true };
+  }
+  if (newest.committerDate - candidate.committerDate > STALE_SECONDS) {
     return { ref: newest, overridden: true };
   }
   return { ref: candidate, overridden: false };

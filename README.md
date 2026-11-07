@@ -69,8 +69,9 @@ entry is an inferred base branch, not `HEAD`:
 4. the closest branch fully contained in the current branch
 5. the most active mainline that shares history with the branch
 
-Mainlines are ordered by their last commit. If an upstream or reflog points at a mainline more than
-90 days older than the newest mainline, the newer one is offered instead.
+Mainlines are ordered by their last commit. When a remote HEAD exists, any other `main`/`master`
+is treated as a stale copy and is not used for inference. Without a remote HEAD, an upstream or
+reflog mainline more than 90 days older than the newest mainline is replaced by the newer one.
 
 After the inferred base, the other mainlines are listed; the inferred one is excluded from that group.
 If any `refs/remotes/<remote>/HEAD` exists, the mainline list is exactly those remote default
