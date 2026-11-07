@@ -74,8 +74,8 @@ active `main`/`release`. If an upstream or reflog points at a mainline more than
 the newest mainline, the newer one is offered instead (shown as `active mainline over stale master`).
 
 After the inferred base, the other local and remote mainlines (`main`, `master`, `develop`, `dev`,
-`trunk`, `next`, `stable`, `release/*`, plus `origin/HEAD`) are listed; the inferred one is excluded
-from that group. `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would
+`trunk`, `next`, `stable`, `release/*`, plus every `refs/remotes/<remote>/HEAD` target) are listed;
+the inferred one is excluded from that group. `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would
 compare the branch with itself), while `Compare Working Tree with Merge Base` keeps `HEAD` after the
 mainlines because it means "only uncommitted changes".
 

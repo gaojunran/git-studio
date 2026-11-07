@@ -58,13 +58,15 @@ export function sortMainlines(refs: RefInfo[]): RefInfo[] {
 }
 
 export async function loadMainlines(services: Services, repo: RepoHandle, refs: RefInfo[]): Promise<RefInfo[]> {
-  const originHead = (await services.runner
-    .run(['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD'], repo.root)
+  const defaultHeads = (await services.runner
+    .run(['for-each-ref', '--format=%(symref:short)', 'refs/remotes/*/HEAD'], repo.root)
     .catch(() => ''))
-    .trim();
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 
   return sortMainlines(
-    refs.filter((ref) => isMainline(ref) || (originHead !== '' && ref.shortName === originHead))
+    refs.filter((ref) => isMainline(ref) || defaultHeads.includes(ref.shortName))
   );
 }
 
