@@ -29,6 +29,7 @@ const PAGE_SIZE = 500;
 interface ShowOptions {
   repo?: RepoHandle;
   fileUri?: vscode.Uri;
+  paths?: string[];
   focus?: string;
 }
 
@@ -75,6 +76,7 @@ export class HistoryPanel {
   private repo: RepoHandle;
   private filters: Filters;
   private filePath: string | undefined;
+  private paths: string[] | undefined;
   private refs: RefInfo[] = [];
   private rows: CommitRow[] = [];
   private rowHashes = new Set<string>();
@@ -136,7 +138,10 @@ export class HistoryPanel {
     this.repo = repo;
     this.filters = emptyFilters();
     this.filePath = options.fileUri ? services.repoService.relativePath(repo, options.fileUri) : undefined;
-    if (this.filePath) {
+    this.paths = options.paths?.filter(Boolean);
+    if (this.paths && this.paths.length > 0) {
+      this.filters.path = this.paths.length === 1 ? this.paths[0] : this.paths.join(', ');
+    } else if (this.filePath) {
       this.filters.path = this.filePath;
     }
     this.pendingFocus = options.focus;
@@ -149,7 +154,9 @@ export class HistoryPanel {
     this.bindRepo();
 
     this.panel.webview.html = renderHtml(panel.webview, services.extensionUri);
-    if (this.filePath) {
+    if (this.paths && this.paths.length > 0) {
+      panel.title = `History: ${this.paths.length === 1 ? path.basename(this.paths[0]) : `${this.paths.length} paths`}`;
+    } else if (this.filePath) {
       panel.title = `History: ${path.basename(this.filePath)}`;
     }
     this.disposables.push(
@@ -173,6 +180,7 @@ export class HistoryPanel {
       this.refsSource = 'default';
       this.consumed = 0;
       this.filePath = undefined;
+      this.paths = undefined;
       this.refs = [];
       this.rows = [];
       this.rowHashes.clear();
@@ -181,6 +189,19 @@ export class HistoryPanel {
       this.refSignature = '';
       this.details.clear();
       this.parentIndex.clear();
+    }
+
+    if (options.paths && options.paths.length > 0) {
+      this.paths = options.paths.filter(Boolean);
+      this.filePath = this.paths.length === 1 ? this.paths[0] : undefined;
+      this.filters = {
+        ...this.filters,
+        path: this.paths.length === 1 ? this.paths[0] : this.paths.join(', '),
+        message: '',
+        author: ''
+      };
+      this.refSignature = '';
+      this.panel.title = `History: ${this.paths.length === 1 ? path.basename(this.paths[0]) : `${this.paths.length} paths`}`;
     }
 
     if (options.fileUri) {
@@ -342,6 +363,9 @@ export class HistoryPanel {
         this.refsSource = 'custom';
       }
       this.refsInitialized = true;
+      if (this.paths && this.filters.path !== (this.paths.length === 1 ? this.paths[0] : this.paths.join(', '))) {
+        this.paths = undefined;
+      }
       if (this.filePath && this.filters.path !== this.filePath) {
         this.filePath = undefined;
       }
@@ -357,8 +381,9 @@ export class HistoryPanel {
       const stale = await this.checkStale(signal);
       const query: LogQuery = {
         refs: this.filters.refs,
-        path: this.filters.path || undefined,
-        follow: Boolean(this.filters.path && this.filePath),
+        path: this.paths ? undefined : this.filters.path || undefined,
+        paths: this.paths,
+        follow: Boolean(!this.paths && this.filters.path && this.filePath),
         author: this.filters.author || undefined,
         message: this.filters.message || undefined,
         regex: this.filters.regex,
@@ -748,6 +773,14 @@ export class HistoryPanel {
     }
 
     this.pendingRebase = { head: plan.head, label: `rebase ${plan.items.length} commits`, branch: plan.branch };
+    await this.services.journal.record(this.repo.root, {
+      label: this.pendingRebase.label,
+      before: plan.head,
+      after: plan.head,
+      branch: plan.branch,
+      at: Date.now(),
+      pending: true
+    });
     try {
       const result = await this.services.writes.rebase(this.repo.root, plan, plan.head);
       if (result === 'done') {
@@ -780,14 +813,12 @@ export class HistoryPanel {
     }
     const after = await headOid(this.services.runner, this.repo.root);
     if (!after || after === pending.head) {
+      await this.services.journal.pop(this.repo.root);
       return;
     }
-    await this.services.journal.record(this.repo.root, {
-      label: pending.label,
-      before: pending.head,
+    await this.services.journal.updateLast(this.repo.root, {
       after,
-      branch: pending.branch,
-      at: Date.now()
+      pending: false
     });
   }
 
@@ -799,6 +830,21 @@ export class HistoryPanel {
     }
 
     const head = await headOid(this.services.runner, this.repo.root);
+    if (entry.pending) {
+      const answer = await vscode.window.showWarningMessage(
+        `Abort the in-progress ${entry.label}? It will return ${entry.branch ?? 'HEAD'} to ${entry.before.slice(0, 7)}.`,
+        { modal: true },
+        'Abort'
+      );
+      if (answer !== 'Abort') {
+        return;
+      }
+      await this.services.writes.abort(this.repo.root);
+      await this.services.journal.pop(this.repo.root);
+      await this.afterWrite();
+      void vscode.window.showInformationMessage(`Git Studio: aborted ${entry.label}.`);
+      return;
+    }
     if (!head || head !== entry.after) {
       void vscode.window.showWarningMessage(
         'Git Studio: history changed since the last rewrite, so it cannot be undone safely. Refresh first.'
@@ -808,7 +854,7 @@ export class HistoryPanel {
     }
 
     const answer = await vscode.window.showWarningMessage(
-      `Undo ${entry.label}? ${entry.branch ?? 'HEAD'} will be reset to ${entry.before.slice(0, 7)} and tracked working tree changes will be discarded.`,
+      `Undo ${entry.label}? ${entry.branch ?? 'HEAD'} will be reset to ${entry.before.slice(0, 7)}. Tracked working tree changes are kept when possible.`,
       { modal: true },
       'Undo'
     );
@@ -816,7 +862,14 @@ export class HistoryPanel {
       return;
     }
 
-    await this.services.writes.reset(this.repo.root, entry.before, 'hard', head);
+    try {
+      await this.services.writes.reset(this.repo.root, entry.before, 'keep', head);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Git Studio: could not undo without overwriting local changes. Commit or stash them first. ${errorText(error)}`
+      );
+      return;
+    }
     await this.services.journal.pop(this.repo.root);
     await this.afterWrite();
     void vscode.window.showInformationMessage(`Git Studio: undid ${entry.label}.`);

@@ -6,6 +6,7 @@ export interface JournalEntry {
   after: string;
   branch: string | null;
   at: number;
+  pending?: boolean;
 }
 
 type Store = Record<string, JournalEntry[]>;
@@ -28,6 +29,16 @@ export class Journal {
   async record(root: string, entry: JournalEntry): Promise<void> {
     const store = { ...(this.memento.get<Store>(KEY) ?? {}) };
     store[root] = [...(store[root] ?? []), entry].slice(-LIMIT);
+    await this.memento.update(KEY, store);
+  }
+
+  async updateLast(root: string, patch: Partial<JournalEntry>): Promise<void> {
+    const store = { ...(this.memento.get<Store>(KEY) ?? {}) };
+    const entries = store[root] ?? [];
+    if (entries.length === 0) {
+      return;
+    }
+    store[root] = [...entries.slice(0, -1), { ...entries[entries.length - 1], ...patch }];
     await this.memento.update(KEY, store);
   }
 

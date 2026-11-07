@@ -193,15 +193,16 @@ export class AnnotateController implements vscode.Disposable {
       return cached.lines;
     }
 
-    const ignoreWhitespace = vscode.workspace
-      .getConfiguration('gitStudio')
-      .get<boolean>('annotate.ignoreWhitespace', true);
+    const configuration = vscode.workspace.getConfiguration('gitStudio');
+    const ignoreWhitespace = configuration.get<boolean>('annotate.ignoreWhitespace', true);
+    const detectCopies = configuration.get<boolean>('annotate.detectCopies', false);
+    const ignoreRevsFile = configuration.get<string>('annotate.ignoreRevsFile', '');
     try {
       const lines = await loadBlame(
         this.services.runner,
         repo.root,
         relative,
-        { ignoreWhitespace, detectMoves: true }
+        { ignoreWhitespace, detectMoves: true, detectCopies, ignoreRevsFile }
       );
       this.cache.set(`${repo.root}:${relative}`, { key, lines });
       if (this.cache.size > CACHE_LIMIT) {

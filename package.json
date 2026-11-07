@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.15.1",
+  "version": "0.16.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -100,6 +100,76 @@
         "category": "Git Studio"
       },
       {
+        "command": "gitStudio.folderHistory",
+        "title": "Folder History",
+        "category": "Git Studio",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "gitStudio.multiPathHistory",
+        "title": "History for Selected Paths",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.worktreeWorkbench",
+        "title": "Worktrees…",
+        "category": "Git Studio",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "gitStudio.reflogWorkbench",
+        "title": "Reflog…",
+        "category": "Git Studio",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitStudio.reflogUndo",
+        "title": "Restore HEAD from Reflog…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.stashWorkbench",
+        "title": "Stash Workbench…",
+        "category": "Git Studio",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "gitStudio.exportPatch",
+        "title": "Export Patch…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.applyPatch",
+        "title": "Apply Patch…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.exportGraph",
+        "title": "Export History Graph (SVG)…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.diffReflog",
+        "title": "Compare with Reflog Entry…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.diffIncoming",
+        "title": "Compare Incoming Commits…",
+        "category": "Git Studio",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "gitStudio.diffTagPrevious",
+        "title": "Compare Tag with Previous Tag…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.diffRemoteTracking",
+        "title": "Compare Against Remote Tracking Branch…",
+        "category": "Git Studio"
+      },
+      {
         "command": "gitStudio.undoLastRewrite",
         "title": "Undo Last Rewrite",
         "category": "Git Studio"
@@ -166,6 +236,21 @@
           "group": "navigation@10"
         },
         {
+          "command": "gitStudio.worktreeWorkbench",
+          "when": "scmProvider == git",
+          "group": "navigation@6"
+        },
+        {
+          "command": "gitStudio.reflogWorkbench",
+          "when": "scmProvider == git",
+          "group": "navigation@7"
+        },
+        {
+          "command": "gitStudio.stashWorkbench",
+          "when": "scmProvider == git",
+          "group": "navigation@8"
+        },
+        {
           "command": "gitStudio.openBoard",
           "when": "scmProvider == git",
           "group": "navigation@9"
@@ -199,6 +284,21 @@
           "command": "gitStudio.diffMergeBase",
           "when": "scmProvider == git",
           "group": "1_compare@5"
+        },
+        {
+          "command": "gitStudio.diffIncoming",
+          "when": "scmProvider == git",
+          "group": "1_compare@6"
+        },
+        {
+          "command": "gitStudio.diffTagPrevious",
+          "when": "scmProvider == git",
+          "group": "1_compare@7"
+        },
+        {
+          "command": "gitStudio.diffRemoteTracking",
+          "when": "scmProvider == git",
+          "group": "1_compare@8"
         }
       ],
       "scm/resourceState/context": [
@@ -228,6 +328,16 @@
           "command": "gitStudio.diffFileRevisions",
           "when": "!explorerResourceIsFolder && resourceScheme == file",
           "group": "9_git@3"
+        },
+        {
+          "command": "gitStudio.folderHistory",
+          "when": "explorerResourceIsFolder && resourceScheme == file",
+          "group": "9_git@1"
+        },
+        {
+          "command": "gitStudio.multiPathHistory",
+          "when": "resourceScheme == file",
+          "group": "9_git@4"
         },
         {
           "command": "gitStudio.diffFolder",
@@ -283,7 +393,7 @@
             "all"
           ],
           "default": "primary",
-          "markdownDescription": "Refs shown when the history panel opens. `primary` = current branch, its upstream, main/master/develop, recently updated local branches and pinned refs. `current` = current branch only. `all` = every ref (can produce a very wide graph)."
+          "markdownDescription": "Refs shown when the history panel opens. `primary` = current branch, its upstream, local `main`/`master`/`develop`/`dev`/`trunk`/`release`, recently updated local branches and pinned refs. `current` = current branch only. `all` = every ref (can produce a very wide graph). This is separate from the ref picker's base-branch inference, which uses remote HEAD and fork-point analysis."
         },
         "gitStudio.history.recentRefLimit": {
           "type": "number",
@@ -324,6 +434,21 @@
           "default": true,
           "description": "Ignore whitespace changes when computing blame."
         },
+        "gitStudio.annotate.detectCopies": {
+          "type": "boolean",
+          "default": false,
+          "description": "Detect lines copied from other files (-C -C). Slower on large files."
+        },
+        "gitStudio.annotate.ignoreRevsFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a .git-blame-ignore-revs file, relative to the repository root."
+        },
+        "gitStudio.remote.commitUrlTemplate": {
+          "type": "string",
+          "default": "",
+          "description": "Custom commit URL template for self-hosted Git hosts. Use {url} for the remote URL and {hash} for the commit hash."
+        },
         "gitStudio.git.path": {
           "type": "string",
           "default": "",
@@ -341,7 +466,8 @@
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "test": "vitest run",
     "install:local": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out dist/git-studio-$npm_package_version.vsix && code --install-extension dist/git-studio-$npm_package_version.vsix --force",
-    "vscode:prepublish": "npm run build"
+    "vscode:prepublish": "npm run build",
+    "test:integration": "bash test/integration/run.sh"
   },
   "dependencies": {
     "@openchamber/sdk": "^2.6.1",

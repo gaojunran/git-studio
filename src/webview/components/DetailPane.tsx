@@ -193,6 +193,16 @@ export function DetailPane(props: Props) {
               <span className="file__actions">
                 <button
                   className="btn btn--icon btn--tiny"
+                  title="Copy path"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onCopy(file.path);
+                  }}
+                >
+                  ⧉
+                </button>
+                <button
+                  className="btn btn--icon btn--tiny"
                   title="File history"
                   onClick={(event) => {
                     event.stopPropagation();

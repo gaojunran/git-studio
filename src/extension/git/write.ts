@@ -65,7 +65,7 @@ export class WriteCoordinator {
     });
   }
 
-  async reset(cwd: string, hash: string, mode: 'soft' | 'mixed' | 'hard', expectedHead: string | undefined): Promise<void> {
+  async reset(cwd: string, hash: string, mode: 'soft' | 'mixed' | 'hard' | 'keep', expectedHead: string | undefined): Promise<void> {
     await this.run(cwd, expectedHead, async () => {
       const oid = await resolveCommit(this.runner, cwd, hash);
       await this.runner.run(['reset', `--${mode}`, oid], cwd);

@@ -369,7 +369,8 @@ export class CommitActionRunner {
   private async openOnRemote(hash: string): Promise<void> {
     const repo = this.getRepo();
     const remote = pickRemoteUrl(repo.repo.state.remotes);
-    const url = remote ? commitUrl(remote, hash) : undefined;
+    const template = vscode.workspace.getConfiguration('gitStudio').get<string>('remote.commitUrlTemplate', '');
+    const url = remote ? commitUrl(remote, hash, template) : undefined;
     if (!url) {
       void vscode.window.showInformationMessage('Git Studio: no supported remote URL for this commit.');
       return;

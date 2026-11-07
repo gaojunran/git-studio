@@ -10,7 +10,7 @@ import { pickRef, shortRef } from './refPicker';
 import { currentBranchRef, resolveCurrentRef } from './currentRef';
 import { mergeBaseLabel, mergeBaseOf } from './mergeBase';
 
-async function repoFor(services: Services, uri?: vscode.Uri): Promise<RepoHandle | undefined> {
+export async function repoFor(services: Services, uri?: vscode.Uri): Promise<RepoHandle | undefined> {
   const repo = await services.repoService.pick(uri ?? vscode.window.activeTextEditor?.document.uri);
   if (!repo) {
     void vscode.window.showWarningMessage('Git Studio: no Git repository found in this workspace.');
@@ -33,7 +33,7 @@ function refEntries(
   });
 }
 
-async function openRefDiff(
+export async function openRefDiff(
   services: Services,
   repo: RepoHandle,
   left: string,
@@ -331,6 +331,84 @@ export async function compareFolder(services: Services, uri?: vscode.Uri, refOve
   });
 
   await vscode.commands.executeCommand('vscode.changes', `${prefix} ↔ ${scope}`, entries);
+}
+
+export async function compareIncoming(services: Services, uri?: vscode.Uri): Promise<void> {
+  const repo = await repoFor(services, uri);
+  if (!repo) {
+    return;
+  }
+  const upstream = await services.runner
+    .run(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], repo.root)
+    .then((value) => value.trim())
+    .catch(() => '');
+  if (!upstream) {
+    void vscode.window.showInformationMessage('Git Studio: the current branch has no upstream.');
+    return;
+  }
+  await openRefDiff(services, repo, 'HEAD', upstream, `Incoming ↔ ${shortRef(upstream)}`);
+}
+
+export async function compareTagPrevious(services: Services, uri?: vscode.Uri): Promise<void> {
+  const repo = await repoFor(services, uri);
+  if (!repo) {
+    return;
+  }
+  const output = await services.runner
+    .run(['for-each-ref', '--sort=-creatordate', '--format=%(refname:short)', 'refs/tags'], repo.root)
+    .catch(() => '');
+  const tags = output.split('\n').filter(Boolean);
+  if (tags.length < 2) {
+    void vscode.window.showInformationMessage('Git Studio: this repository has fewer than two tags.');
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(tags, { placeHolder: 'Compare which tag with its previous tag?' });
+  if (!picked) {
+    return;
+  }
+  const index = tags.indexOf(picked);
+  const previous = tags[index + 1];
+  if (!previous) {
+    void vscode.window.showInformationMessage(`Git Studio: ${picked} is the oldest tag.`);
+    return;
+  }
+  await openRefDiff(services, repo, previous, picked, `${shortRef(previous)} ↔ ${shortRef(picked)}`);
+}
+
+export async function compareRemoteTracking(services: Services, uri?: vscode.Uri): Promise<void> {
+  const repo = await repoFor(services, uri);
+  if (!repo) {
+    return;
+  }
+  const output = await services.runner
+    .run(['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/remotes'], repo.root)
+    .catch(() => '');
+  const remotes = output.split('\n').filter((name) => name && !name.endsWith('/HEAD'));
+  if (remotes.length === 0) {
+    void vscode.window.showInformationMessage('Git Studio: this repository has no remote-tracking branches.');
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(remotes, { placeHolder: 'Compare with which remote-tracking branch?' });
+  if (!picked) {
+    return;
+  }
+  const direction = await vscode.window.showQuickPick(
+    [
+      { label: `${picked} → HEAD`, value: 'incoming' as const },
+      { label: `HEAD → ${picked}`, value: 'outgoing' as const }
+    ],
+    { placeHolder: 'Which direction?' }
+  );
+  if (!direction) {
+    return;
+  }
+  await openRefDiff(
+    services,
+    repo,
+    direction.value === 'incoming' ? picked : 'HEAD',
+    direction.value === 'incoming' ? 'HEAD' : picked,
+    direction.value === 'incoming' ? `Incoming ↔ ${shortRef(picked)}` : `Outgoing ↔ ${shortRef(picked)}`
+  );
 }
 
 export async function compareUnpushed(services: Services, uri?: vscode.Uri): Promise<void> {

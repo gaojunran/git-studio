@@ -31,6 +31,12 @@ describe('commitUrl', () => {
   it('returns undefined for unknown hosts', () => {
     expect(commitUrl('https://git.example.com/team/repo.git', 'abc123')).toBeUndefined();
   });
+
+  it('uses a custom template', () => {
+    expect(commitUrl('https://git.example.com/team/repo.git', 'abc123', '{url}/commits/{hash}')).toBe(
+      'https://git.example.com/team/repo/commits/abc123'
+    );
+  });
 });
 
 describe('pickRemoteUrl', () => {

@@ -9,6 +9,10 @@ export interface DefaultRefOptions {
 }
 
 const PRIMARY_BRANCHES = new Set(['main', 'master', 'develop', 'dev', 'trunk', 'release']);
+// History's default ref set is deliberately broader than the ref picker's mainline
+// definition. The picker answers "what is the base branch?" (remote HEAD plus
+// main/master fallback); history answers "which lines should be visible?" and
+// includes long-lived integration branches such as develop/release.
 
 function globToRegExp(pattern: string): RegExp {
   const escaped = pattern

@@ -265,7 +265,7 @@ export class GuestService {
       credential,
       header: token.header,
       scheme: token.scheme,
-      methods: new Set(record.role === 'tracker' ? ['GET'] : ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+      methods: new Set(record.role === 'tracker' ? ['GET', 'POST'] : ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
       callbackPath: outboundPath(record),
       deadline: Date.now() + 30_000
     });

@@ -9,13 +9,20 @@ import { compareWorkingTree } from './features/compare';
 import {
   compareFileRevisions,
   compareFolder,
+  compareIncoming,
   compareMergeBase,
   compareRefs,
   compareRefsMergeBase,
+  compareRemoteTracking,
   compareStash,
+  compareTagPrevious,
   compareUnpushed
 } from './features/diffs';
+import { worktreeWorkbench } from './features/worktree';
+import { applyPatch, exportGraph, exportPatch } from './features/export';
+import { compareReflogEntry, reflogUndo, reflogWorkbench } from './features/reflog';
 import { HistoryPanel } from './host/historyPanel';
+import { stashWorkbench } from './features/stash';
 import { Journal } from './host/journal';
 import { RepoService } from './host/repoService';
 import type { Services } from './host/services';
@@ -61,6 +68,17 @@ function uriFromArg(arg: unknown): vscode.Uri | undefined {
   }
   const candidate = first as ScmResourceArg;
   return candidate.resourceUri ?? candidate.resource?.resourceUri;
+}
+
+function urisFromArg(arg: unknown): vscode.Uri[] {
+  const values = Array.isArray(arg) ? arg : [arg];
+  return values.flatMap((value) => {
+    if (value instanceof vscode.Uri) {
+      return [value];
+    }
+    const uri = uriFromArg(value);
+    return uri ? [uri] : [];
+  });
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -144,6 +162,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await HistoryPanel.show(services, { fileUri: uri });
     }),
 
+    vscode.commands.registerCommand('gitStudio.folderHistory', async (arg?: unknown) => {
+      const uri = uriFromArg(arg) ?? vscode.window.activeTextEditor?.document.uri;
+      const repo = await repoService.pick(uri);
+      if (!repo) {
+        void vscode.window.showWarningMessage('Git Studio: no Git repository found in this workspace.');
+        return;
+      }
+      const relative = uri ? repoService.relativePath(repo, uri) : undefined;
+      if (!relative) {
+        void vscode.window.showWarningMessage('Git Studio: select a folder inside the repository.');
+        return;
+      }
+      await HistoryPanel.show(services, { repo, paths: [relative] });
+    }),
+    vscode.commands.registerCommand('gitStudio.multiPathHistory', async (arg?: unknown) => {
+      const uris = urisFromArg(arg);
+      const repo = await repoService.pick(uris[0] ?? vscode.window.activeTextEditor?.document.uri);
+      if (!repo) {
+        void vscode.window.showWarningMessage('Git Studio: no Git repository found in this workspace.');
+        return;
+      }
+      const paths = uris
+        .map((uri) => repoService.relativePath(repo, uri))
+        .filter((value): value is string => Boolean(value));
+      if (paths.length === 0) {
+        void vscode.window.showWarningMessage('Git Studio: select files or folders inside the repository.');
+        return;
+      }
+      await HistoryPanel.show(services, { repo, paths });
+    }),
     vscode.commands.registerCommand('gitStudio.annotateFile', async (arg?: unknown) => {
       const uri = uriFromArg(arg) ?? vscode.window.activeTextEditor?.document.uri;
       if (!uri) {
@@ -241,6 +289,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await compareUnpushed(services, uri);
     }),
 
+    vscode.commands.registerCommand('gitStudio.exportPatch', (arg?: unknown) => exportPatch(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.applyPatch', (arg?: unknown) => applyPatch(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.exportGraph', (arg?: unknown) => exportGraph(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.diffReflog', (arg?: unknown) => compareReflogEntry(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.worktreeWorkbench', (arg?: unknown) => worktreeWorkbench(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.reflogWorkbench', (arg?: unknown) => reflogWorkbench(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.reflogUndo', (arg?: unknown) => reflogUndo(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.stashWorkbench', (arg?: unknown) => stashWorkbench(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.diffIncoming', async (arg?: unknown) => compareIncoming(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.diffTagPrevious', async (arg?: unknown) => compareTagPrevious(services, uriFromArg(arg))),
+    vscode.commands.registerCommand('gitStudio.diffRemoteTracking', async (arg?: unknown) => compareRemoteTracking(services, uriFromArg(arg))),
     vscode.commands.registerCommand('gitStudio.undoLastRewrite', async () => {
       await HistoryPanel.undoCurrent();
     }),

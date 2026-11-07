@@ -756,6 +756,11 @@ select.input {
 .rebase-item {
   border-bottom: 1px solid var(--vscode-panel-border);
   padding: 4px 0;
+  cursor: grab;
+}
+
+.rebase-item:active {
+  cursor: grabbing;
 }
 
 .rebase-row {
@@ -803,7 +808,9 @@ select.input {
 .rebase-row__message {
   width: calc(100% - 112px);
   margin: 2px 4px 6px 106px;
-  height: 24px;
+  min-height: 40px;
+  resize: vertical;
+  font-family: inherit;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border);

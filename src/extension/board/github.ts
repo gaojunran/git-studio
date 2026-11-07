@@ -1,5 +1,6 @@
 import type {
   BoardAuthor,
+  BoardCheck,
   BoardItemDetail,
   BoardItemSummary,
   BoardKind,
@@ -8,6 +9,7 @@ import type {
   BoardListResult,
   BoardProviderInfo,
   BoardRepoInfo,
+  BoardReviewThread,
   BoardState
 } from '../../shared/board';
 import { normalizeRemoteUrl } from '../git/remote';
@@ -21,13 +23,16 @@ export interface BoardProvider {
   list(query: BoardListQuery): Promise<BoardListResult>;
   detail(kind: BoardKind, number: number): Promise<BoardItemDetail>;
   comment(kind: BoardKind, number: number, body: string): Promise<void>;
-  setState(kind: BoardKind, number: number, state: 'open' | 'closed'): Promise<void>;
+  setState(kind: BoardKind, number: number, state: 'open' | 'closed', reason?: string): Promise<void>;
+  markReady?(number: number): Promise<void>;
+  checks?(number: number): Promise<BoardCheck[]>;
   merge(number: number, method: 'merge' | 'squash' | 'rebase'): Promise<void>;
   listLabels?(): Promise<BoardLabel[]>;
   listReviewerCandidates?(): Promise<BoardAuthor[]>;
   setLabels?(number: number, names: string[]): Promise<void>;
   setReviewers?(number: number, names: string[]): Promise<void>;
   review?(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void>;
+  replyReviewThread?(threadId: string, body: string): Promise<void>;
   reviewVotes?(number: number, votes: Record<string, number>, body?: string): Promise<void>;
 }
 
@@ -367,15 +372,18 @@ export class GitHubProvider implements BoardProvider {
       canClose: issue.state === 'open',
       canReopen: issue.state === 'closed',
       canMerge: false,
-      canAnswer: false
+      canAnswer: false,
+      closeReasons: ['completed', 'not_planned']
     };
   }
 
   private async detailPull(number: number): Promise<BoardItemDetail> {
     const pull = await this.request<GitHubPull>(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}`);
-    const comments = await this.request<GitHubComment[]>(
-      `/repos/${this.github.owner}/${this.github.name}/issues/${number}/comments?per_page=100`
-    );
+    const [comments, threads, checks] = await Promise.all([
+      this.request<GitHubComment[]>(`/repos/${this.github.owner}/${this.github.name}/issues/${number}/comments?per_page=100`),
+      this.reviewThreads(number).catch(() => []),
+      this.checksForSha(pull.head?.sha).catch(() => [])
+    ]);
     return {
       ...this.pullSummary(pull),
       body: pull.body ?? '',
@@ -401,8 +409,62 @@ export class GitHubProvider implements BoardProvider {
       canClose: pull.state === 'open' && !pull.merged,
       canReopen: pull.state === 'closed' && !pull.merged,
       canMerge: pull.state === 'open' && !pull.draft,
-      canAnswer: false
+      canAnswer: false,
+      canMarkReady: pull.state === 'open' && pull.draft === true,
+      closeReasons: ['completed', 'not_planned'],
+      checks: checks.length > 0 ? {
+        total: checks.length,
+        passed: checks.filter((check) => check.conclusion === 'success' || check.conclusion === 'neutral' || check.conclusion === 'skipped').length,
+        failed: checks.filter((check) => check.conclusion === 'failure' || check.conclusion === 'cancelled' || check.conclusion === 'timed_out' || check.conclusion === 'action_required').length,
+        pending: checks.filter((check) => check.conclusion === null).length
+      } : null,
+      reviewThreads: threads
     };
+  }
+
+  private async reviewThreads(number: number): Promise<BoardReviewThread[]> {
+    const data = await this.graphql<{
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            nodes: Array<{
+              id: string;
+              isResolved: boolean;
+              path: string | null;
+              line: number | null;
+              comments: { nodes: Array<{ id: string; body: string; createdAt: string; author: { login: string; avatarUrl?: string | null } | null }> };
+            }>;
+          };
+        } | null;
+      };
+    }>(
+      `query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $number) {
+            reviewThreads(first: 50) {
+              nodes {
+                id isResolved path line
+                comments(first: 20) { nodes { id body createdAt author { login avatarUrl } } }
+              }
+            }
+          }
+        }
+      }`,
+      { owner: this.github.owner, name: this.github.name, number }
+    );
+    const nodes = data.repository.pullRequest?.reviewThreads.nodes ?? [];
+    return nodes.map((thread) => ({
+      id: thread.id,
+      path: thread.path,
+      line: thread.line,
+      resolved: thread.isResolved,
+      comments: thread.comments.nodes.map((comment) => ({
+        id: comment.id,
+        author: comment.author ? { login: comment.author.login, avatarUrl: comment.author.avatarUrl ?? null } : null,
+        body: comment.body,
+        createdAt: comment.createdAt
+      }))
+    }));
   }
 
   private async detailDiscussion(number: number): Promise<BoardItemDetail> {
@@ -439,7 +501,8 @@ export class GitHubProvider implements BoardProvider {
       canClose: !discussion.closed,
       canReopen: discussion.closed,
       canMerge: false,
-      canAnswer: !discussion.closed
+      canAnswer: !discussion.closed,
+      closeReasons: ['resolved', 'outdated', 'duplicate']
     };
   }
 
@@ -475,7 +538,7 @@ export class GitHubProvider implements BoardProvider {
     });
   }
 
-  async setState(kind: BoardKind, number: number, state: 'open' | 'closed'): Promise<void> {
+  async setState(kind: BoardKind, number: number, state: 'open' | 'closed', reason?: string): Promise<void> {
     if (kind === 'discussion') {
       const data = await this.graphql<{ repository: { discussion: { id: string } | null } }>(
         `query($owner: String!, $name: String!, $number: Int!) {
@@ -488,9 +551,10 @@ export class GitHubProvider implements BoardProvider {
         throw new Error(`Discussion #${number} not found`);
       }
       if (state === 'closed') {
+        const closeReason = reason === 'resolved' ? 'RESOLVED' : reason === 'duplicate' ? 'DUPLICATE' : 'OUTDATED';
         await this.graphql(
-          `mutation($discussionId: ID!) { closeDiscussion(input: { discussionId: $discussionId, reason: OUTDATED }) { discussion { closed } } }`,
-          { discussionId: discussion.id }
+          `mutation($discussionId: ID!, $reason: DiscussionCloseReason!) { closeDiscussion(input: { discussionId: $discussionId, reason: $reason }) { discussion { closed } } }`,
+          { discussionId: discussion.id, reason: closeReason }
         );
       } else {
         await this.graphql(
@@ -502,8 +566,62 @@ export class GitHubProvider implements BoardProvider {
     }
     await this.request(`/repos/${this.github.owner}/${this.github.name}/issues/${number}`, {
       method: 'PATCH',
-      body: JSON.stringify({ state })
+      body: JSON.stringify(kind === 'issue' && reason ? { state, state_reason: reason } : { state })
     });
+  }
+
+  async markReady(number: number): Promise<void> {
+    const data = await this.graphql<{ repository: { pullRequest: { id: string } | null } }>(
+      `query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } }
+      }`,
+      { owner: this.github.owner, name: this.github.name, number }
+    );
+    const pull = data.repository.pullRequest;
+    if (!pull) {
+      throw new Error(`Pull request #${number} not found`);
+    }
+    await this.graphql(
+      `mutation($pullRequestId: ID!) {
+        markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) { pullRequest { isDraft } }
+      }`,
+      { pullRequestId: pull.id }
+    );
+  }
+
+  async checks(number: number): Promise<BoardCheck[]> {
+    const pull = await this.request<GitHubPull>(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}`);
+    return this.checksForSha(pull.head?.sha);
+  }
+
+  private async checksForSha(sha: string | undefined): Promise<BoardCheck[]> {
+    if (!sha) {
+      return [];
+    }
+    const [runs, statuses] = await Promise.all([
+      this.request<{ check_runs?: Array<{ name: string; status: string; conclusion: string | null; html_url?: string | null; output?: { title?: string | null; summary?: string | null } }> }>(
+        `/repos/${this.github.owner}/${this.github.name}/commits/${sha}/check-runs?per_page=100`
+      ).catch(() => ({ check_runs: [] })),
+      this.request<Array<{ context: string; state: string; description?: string | null; target_url?: string | null }>>(
+        `/repos/${this.github.owner}/${this.github.name}/commits/${sha}/statuses?per_page=100`
+      ).catch(() => [])
+    ]);
+    return [
+      ...(runs.check_runs ?? []).map((run) => ({
+        name: run.name,
+        status: run.status,
+        conclusion: run.conclusion,
+        url: run.html_url ?? null,
+        description: run.output?.title ?? null
+      })),
+      ...statuses.map((status) => ({
+        name: status.context,
+        status: status.state === 'pending' ? 'in_progress' : 'completed',
+        conclusion: status.state === 'pending' ? null : status.state,
+        url: status.target_url ?? null,
+        description: status.description ?? null
+      }))
+    ];
   }
 
   async merge(number: number, method: 'merge' | 'squash' | 'rebase'): Promise<void> {
@@ -556,6 +674,15 @@ export class GitHubProvider implements BoardProvider {
         body: JSON.stringify({ reviewers: added })
       });
     }
+  }
+
+  async replyReviewThread(threadId: string, body: string): Promise<void> {
+    await this.graphql(
+      `mutation($threadId: ID!, $body: String!) {
+        addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $threadId, body: $body }) { comment { id } }
+      }`,
+      { threadId, body }
+    );
   }
 
   async review(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void> {

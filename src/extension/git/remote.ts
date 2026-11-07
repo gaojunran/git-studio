@@ -21,10 +21,14 @@ export function normalizeRemoteUrl(raw: string): string | undefined {
   return value.replace(/\.git$/, '').replace(/\/+$/, '');
 }
 
-export function commitUrl(remoteUrl: string, hash: string): string | undefined {
+export function commitUrl(remoteUrl: string, hash: string, template?: string): string | undefined {
   const base = normalizeRemoteUrl(remoteUrl);
   if (!base) {
     return undefined;
+  }
+
+  if (template?.trim()) {
+    return template.trim().replaceAll('{url}', base).replaceAll('{hash}', hash);
   }
 
   let host: string;

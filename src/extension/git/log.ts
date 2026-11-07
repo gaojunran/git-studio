@@ -4,6 +4,7 @@ import type { GitRunner } from './cli';
 export interface LogQuery {
   refs: string[];
   path?: string;
+  paths?: string[];
   follow?: boolean;
   author?: string;
   message?: string;
@@ -103,7 +104,9 @@ export function buildLogArgs(query: LogQuery): string[] {
   args.push(`--skip=${Math.max(0, query.skip)}`);
   args.push(`--format=${logFormat()}`);
 
-  if (query.path) {
+  if (query.paths && query.paths.length > 0) {
+    args.push('--', ...query.paths.map((path) => `:(literal)${path}`));
+  } else if (query.path) {
     args.push('--', `:(literal)${query.path}`);
   }
 

@@ -371,7 +371,8 @@ export class GuestProvider implements BoardProvider {
       canClose: capabilities.state === true && pull.state === 'open',
       canReopen: capabilities.state === true && pull.state === 'closed',
       canMerge: methods.length > 0 && pull.state === 'open' && pull.draft !== true,
-      canAnswer: false
+      canAnswer: false,
+      canMarkReady: capabilities.draftChangeRequests === true && pull.state === 'open' && pull.draft === true
     };
   }
 
@@ -386,14 +387,25 @@ export class GuestProvider implements BoardProvider {
     );
   }
 
-  async setState(kind: BoardKind, number: number, state: 'open' | 'closed'): Promise<void> {
+  async setState(kind: BoardKind, number: number, state: 'open' | 'closed', reason?: string): Promise<void> {
     const issue = kind === 'issue';
     await this.service.mutate(
       this.record,
       issue ? 'issue-state' : 'change-request-state',
-      { state },
+      reason ? { state, reason } : { state },
       this.mutationContext({ number }),
       issue ? '/issues/state' : '/pr/state'
+    );
+  }
+
+  async markReady(number: number): Promise<void> {
+    const detail = await this.detail('pull', number);
+    await this.service.mutate(
+      this.record,
+      'change-request-ready',
+      {},
+      this.mutationContext({ number, head: detail.head, base: detail.base, headSha: detail.headSha }),
+      '/pr/ready'
     );
   }
 

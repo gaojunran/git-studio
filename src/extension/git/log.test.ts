@@ -42,6 +42,18 @@ describe('parseLog', () => {
 });
 
 describe('buildLogArgs', () => {
+  it('passes multiple literal paths after --', () => {
+    const args = buildLogArgs({
+      refs: ['HEAD'],
+      paths: ['src', 'docs/a b.md'],
+      skip: 0,
+      limit: 10
+    });
+    const separator = args.indexOf('--');
+    expect(separator).toBeGreaterThan(-1);
+    expect(args.slice(separator + 1)).toEqual([':(literal)src', ':(literal)docs/a b.md']);
+  });
+
   it('builds a filtered query without ref filters', () => {
     const args = buildLogArgs({
       refs: [],

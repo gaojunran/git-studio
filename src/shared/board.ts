@@ -54,6 +54,22 @@ export interface BoardComment {
   replyTo?: string | null;
 }
 
+export interface BoardCheck {
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed' | string;
+  conclusion: string | null;
+  url: string | null;
+  description?: string | null;
+}
+
+export interface BoardReviewThread {
+  id: string;
+  path: string | null;
+  line: number | null;
+  resolved: boolean;
+  comments: BoardComment[];
+}
+
 export interface BoardItemDetail extends BoardItemSummary {
   body: string;
   comments: BoardComment[];
@@ -76,6 +92,10 @@ export interface BoardItemDetail extends BoardItemSummary {
   canReopen: boolean;
   canMerge: boolean;
   canAnswer: boolean;
+  canMarkReady?: boolean;
+  closeReasons?: string[];
+  checks?: { total: number; passed: number; failed: number; pending: number } | null;
+  reviewThreads?: BoardReviewThread[];
 }
 
 export interface BoardListQuery {
@@ -145,6 +165,7 @@ export interface BoardTrackerDetail extends BoardTrackerItem {
   description: string | null;
   comments: BoardComment[];
   children?: BoardTrackerItem[];
+  canComment?: boolean;
 }
 
 export interface BoardTrackerListResult {
@@ -202,6 +223,20 @@ export interface BoardReviewersMessage {
   reviewers: BoardAuthor[];
 }
 
+export interface BoardChecksMessage {
+  type: 'checks';
+  requestId: number;
+  checks: BoardCheck[];
+  error?: string;
+}
+
+export interface BoardTrackerStatesMessage {
+  type: 'trackerStates';
+  requestId: number;
+  states: BoardTrackerState[];
+  error?: string;
+}
+
 export interface BoardBusyMessage {
   type: 'busy';
   busy: boolean;
@@ -220,6 +255,8 @@ export type BoardHostMessage =
   | BoardDetailMessage
   | BoardLabelsMessage
   | BoardReviewersMessage
+  | BoardChecksMessage
+  | BoardTrackerStatesMessage
   | BoardTrackerListMessage
   | BoardTrackerDetailMessage
   | BoardBusyMessage
@@ -231,7 +268,12 @@ export type BoardWebviewMessage =
   | { type: 'list'; requestId: number; query: BoardListQuery }
   | { type: 'detail'; requestId: number; kind: BoardKind; number: number }
   | { type: 'comment'; kind: BoardKind; number: number; body: string }
-  | { type: 'setState'; kind: BoardKind; number: number; state: 'open' | 'closed' }
+  | { type: 'setState'; kind: BoardKind; number: number; state: 'open' | 'closed'; reason?: string }
+  | { type: 'markReady'; number: number }
+  | { type: 'checks'; requestId: number; number: number }
+  | { type: 'trackerStates'; requestId: number; containerId: string }
+  | { type: 'trackerSetState'; itemId: string; stateId: string }
+  | { type: 'trackerComment'; identifier: string; body: string }
   | { type: 'merge'; number: number; method: 'merge' | 'squash' | 'rebase' }
   | { type: 'openExternal'; url: string }
   | { type: 'copy'; text: string }
@@ -243,6 +285,7 @@ export type BoardWebviewMessage =
   | { type: 'setLabels'; number: number; names: string[] }
   | { type: 'setReviewers'; number: number; names: string[] }
   | { type: 'review'; number: number; verdict?: 'approve' | 'request-changes'; votes?: Record<string, number>; body?: string }
+  | { type: 'reviewReply'; threadId: string; body: string }
   | { type: 'selectTracker'; trackerId: string }
   | { type: 'trackerList'; requestId: number; state: string; cursor?: string | null }
   | { type: 'trackerDetail'; requestId: number; id: string }

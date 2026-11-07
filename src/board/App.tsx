@@ -7,6 +7,7 @@ import type {
 } from 'react';
 import type {
   BoardAuthor,
+  BoardCheck,
   BoardComment,
   BoardItemDetail,
   BoardItemSummary,
@@ -16,7 +17,8 @@ import type {
   BoardRepoInfo,
   BoardStateFilter,
   BoardTrackerDetail,
-  BoardTrackerItem
+  BoardTrackerItem,
+  BoardTrackerState
 } from '../shared/board';
 import { onMessage, post } from './bridge';
 
@@ -42,6 +44,7 @@ type IconName =
   | 'copy'
   | 'external'
   | 'close'
+  | 'check'
   | 'list'
   | 'repo';
 
@@ -124,6 +127,7 @@ const ICONS: Record<IconName, ReactNode> = {
     </>
   ),
   close: <path d="m4.2 4.2 7.6 7.6M11.8 4.2l-7.6 7.6" />,
+  check: <path d="m3.4 8.3 3.1 3.1 6.1-6.9" />,
   list: <path d="M3 4.4h10M3 8h10M3 11.6h10" />,
   repo: (
     <>
@@ -482,6 +486,93 @@ function readStoredListWidth(): number | null {
   }
 }
 
+type MergeMethod = 'merge' | 'squash' | 'rebase';
+
+const MERGE_METHOD_KEY = 'gitstudio.board.mergeMethod';
+const MERGE_METHOD_LABEL: Record<MergeMethod, string> = {
+  merge: 'Merge',
+  squash: 'Squash and merge',
+  rebase: 'Rebase and merge'
+};
+
+function isMergeMethod(value: string): value is MergeMethod {
+  return value === 'merge' || value === 'squash' || value === 'rebase';
+}
+
+function readStoredMergeMethod(): MergeMethod {
+  try {
+    const value = window.localStorage.getItem(MERGE_METHOD_KEY);
+    return value && isMergeMethod(value) ? value : 'merge';
+  } catch {
+    return 'merge';
+  }
+}
+
+const CLOSE_REASON_LABEL: Record<BoardKind, Record<string, string>> = {
+  issue: { completed: 'Close as completed', not_planned: 'Close as not planned', duplicate: 'Close as duplicate' },
+  discussion: { resolved: 'Close as resolved', outdated: 'Close as outdated', duplicate: 'Close as duplicate' },
+  pull: { completed: 'Close as completed', not_planned: 'Close as not planned' }
+};
+
+function closeReasonLabel(kind: BoardKind, reason: string): string {
+  return CLOSE_REASON_LABEL[kind][reason] ?? `Close as ${reason.replace(/[_-]+/g, ' ')}`;
+}
+
+function checksTone(checks: NonNullable<BoardItemDetail['checks']>): 'pass' | 'fail' | 'pending' {
+  if (checks.failed > 0) {
+    return 'fail';
+  }
+  return checks.pending > 0 ? 'pending' : 'pass';
+}
+
+function checkTone(check: BoardCheck): 'pass' | 'fail' | 'pending' {
+  if (check.status !== 'completed') {
+    return 'pending';
+  }
+  if (!check.conclusion || check.conclusion === 'success' || check.conclusion === 'neutral' || check.conclusion === 'skipped') {
+    return 'pass';
+  }
+  return 'fail';
+}
+
+function checkLabel(check: BoardCheck): string {
+  return (check.conclusion ?? check.status).replace(/_/g, ' ').replace(/^./, (char) => char.toUpperCase());
+}
+
+/** Close a popover on Escape or on a pointer press outside of its container. */
+function useDismissable(open: boolean, onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        closeRef.current();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeRef.current();
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return ref;
+}
+
 function Loading({ label = 'Loading…' }: { label?: string }) {
   return (
     <span className="loading" role="status">
@@ -834,6 +925,416 @@ function Workspace({
   );
 }
 
+interface MultiSelectOption {
+  key: string;
+  label: string;
+  node: ReactNode;
+}
+
+function MultiSelect({
+  ariaLabel,
+  disabled,
+  options,
+  selected,
+  searchPlaceholder,
+  emptyMatchText,
+  renderChip,
+  onApply
+}: {
+  ariaLabel: string;
+  disabled: boolean;
+  options: MultiSelectOption[];
+  selected: string[];
+  searchPlaceholder: string;
+  emptyMatchText: string;
+  renderChip: (key: string, remove: () => void) => ReactNode;
+  onApply: (keys: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [draft, setDraft] = useState<string[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const ref = useDismissable(open, () => setOpen(false));
+
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+  };
+
+  const apply = () => {
+    const known = new Set(options.map((option) => option.key));
+    onApply([
+      ...options.filter((option) => draft.includes(option.key)).map((option) => option.key),
+      ...draft.filter((key) => !known.has(key))
+    ]);
+    close();
+  };
+
+  const filtered = options.filter((option) => option.label.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <div className={`picker${open ? ' picker--open' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="chip-add"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={() => {
+          if (open) {
+            close();
+            return;
+          }
+          setQuery('');
+          setDraft(selected);
+          setOpen(true);
+        }}
+      >
+        <Icon name="plus" className="chip-add__icon" />
+        <span>Edit</span>
+        <Icon name="chevron" className="chip-add__chevron" />
+      </button>
+      {open ? (
+        <div
+          className="picker__panel"
+          role="dialog"
+          aria-label={ariaLabel}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && event.target === searchRef.current) {
+              event.preventDefault();
+              apply();
+            }
+          }}
+        >
+          <input
+            ref={searchRef}
+            className="picker__search"
+            value={query}
+            placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
+            autoFocus
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {draft.length > 0 ? (
+            <div className="picker__chips">
+              {options
+                .filter((option) => draft.includes(option.key))
+                .map((option) => (
+                  <span key={option.key} className="picker__chip">
+                    {renderChip(option.key, () => setDraft((current) => current.filter((key) => key !== option.key)))}
+                  </span>
+                ))}
+              {draft
+                .filter((key) => !options.some((option) => option.key === key))
+                .map((key) => (
+                  <span key={key} className="picker__chip">
+                    {renderChip(key, () => setDraft((current) => current.filter((entry) => entry !== key)))}
+                  </span>
+                ))}
+            </div>
+          ) : null}
+          <div className="picker__list">
+            {filtered.length === 0 ? (
+              <span className="picker__empty">{emptyMatchText}</span>
+            ) : (
+              filtered.map((option) => {
+                const checked = draft.includes(option.key);
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={`picker__row${checked ? ' picker__row--on' : ''}`}
+                    aria-pressed={checked}
+                    disabled={disabled}
+                    onClick={() =>
+                      setDraft((current) =>
+                        checked ? current.filter((key) => key !== option.key) : [...current, option.key]
+                      )
+                    }
+                  >
+                    <span className="picker__check">{checked ? <Icon name="check" /> : null}</span>
+                    <span className="picker__option">{option.node}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <div className="picker__footer">
+            <button
+              type="button"
+              className="btn picker__clear"
+              disabled={disabled || draft.length === 0}
+              onClick={() => setDraft([])}
+            >
+              Clear
+            </button>
+            <button type="button" className="btn btn--primary picker__apply" disabled={disabled} onClick={apply}>
+              Apply
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MergeButton({
+  methods,
+  method,
+  disabled,
+  onSelectMethod,
+  onMerge
+}: {
+  methods: MergeMethod[];
+  method: MergeMethod;
+  disabled: boolean;
+  onSelectMethod: (method: MergeMethod) => void;
+  onMerge: (method: MergeMethod) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useDismissable(open, () => setOpen(false));
+  const available = methods.length > 0 ? methods : (['merge'] as MergeMethod[]);
+  const active = available.includes(method) ? method : available[0];
+  const split = available.length > 1;
+
+  return (
+    <div className={`split-btn${split ? ' split-btn--split' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="btn btn--accent split-btn__main"
+        disabled={disabled}
+        onClick={() => {
+          setOpen(false);
+          onMerge(active);
+        }}
+      >
+        <Icon name="merge" />
+        {MERGE_METHOD_LABEL[active]}
+      </button>
+      {split ? (
+        <button
+          type="button"
+          className="btn btn--accent split-btn__toggle"
+          disabled={disabled}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Choose merge method"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Icon name="chevron" />
+        </button>
+      ) : null}
+      {open && split ? (
+        <div className="menu menu--up" role="menu" aria-label="Merge method">
+          {available.map((entry) => (
+            <button
+              key={entry}
+              type="button"
+              role="menuitemradio"
+              aria-checked={entry === active}
+              className={`menu__item${entry === active ? ' menu__item--on' : ''}`}
+              onClick={() => {
+                onSelectMethod(entry);
+                setOpen(false);
+              }}
+            >
+              <span className="menu__check">{entry === active ? <Icon name="check" /> : null}</span>
+              {MERGE_METHOD_LABEL[entry]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CloseMenu({
+  kind,
+  reasons,
+  disabled,
+  onCloseState
+}: {
+  kind: BoardKind;
+  reasons: string[];
+  disabled: boolean;
+  onCloseState: (reason?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useDismissable(open, () => setOpen(false));
+
+  if (reasons.length === 0) {
+    return (
+      <button type="button" className="btn" disabled={disabled} onClick={() => onCloseState()}>
+        Close
+      </button>
+    );
+  }
+
+  return (
+    <div className="split-btn" ref={ref}>
+      <button
+        type="button"
+        className="btn split-btn__main"
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        Close
+        <Icon name="chevron" className="split-btn__caret" />
+      </button>
+      {open ? (
+        <div className="menu menu--up" role="menu" aria-label="Close reason">
+          {reasons.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              role="menuitem"
+              className="menu__item"
+              onClick={() => {
+                setOpen(false);
+                onCloseState(reason);
+              }}
+            >
+              {closeReasonLabel(kind, reason)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChecksDialog({
+  title,
+  checks,
+  loading,
+  error,
+  onClose,
+  onRefresh,
+  onOpen
+}: {
+  title: string;
+  checks: BoardCheck[] | null;
+  loading: boolean;
+  error?: string;
+  onClose: () => void;
+  onRefresh: () => void;
+  onOpen: (url: string) => void;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="checks-title" onClick={(event) => event.stopPropagation()}>
+        <header className="modal__head">
+          <div className="modal__titles">
+            <h2 id="checks-title">Checks</h2>
+            <p className="modal__subtitle" title={title}>{title}</p>
+          </div>
+          <div className="modal__actions">
+            <button type="button" className="icon-btn" title="Refresh checks" aria-label="Refresh checks" disabled={loading} onClick={onRefresh}>
+              <Icon name="refresh" />
+            </button>
+            <button type="button" className="icon-btn" title="Close" aria-label="Close" onClick={onClose}>
+              <Icon name="close" />
+            </button>
+          </div>
+        </header>
+        <div className="modal__body">
+          {loading && checks === null ? <div className="modal__status"><Loading label="Loading checks…" /></div> : null}
+          {error ? <p className="checks-error">{error}</p> : null}
+          {checks && checks.length === 0 && !loading ? <p className="modal__status">No checks reported for this item.</p> : null}
+          {checks && checks.length > 0 ? (
+            <ul className="checks">
+              {checks.map((check, index) => {
+                const tone = checkTone(check);
+                const url = check.url;
+                return (
+                  <li key={`${check.name}-${index}`} className={`check check--${tone}`}>
+                    <span className="check__dot" />
+                    <div className="check__main">
+                      <span className="check__name">{check.name}</span>
+                      {check.description ? <span className="check__desc">{check.description}</span> : null}
+                    </div>
+                    <span className={`check__state check__state--${tone}`}>{checkLabel(check)}</span>
+                    {url ? (
+                      <a
+                        className="check__link"
+                        href={url}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          onOpen(url);
+                        }}
+                      >
+                        Open
+                        <Icon name="external" />
+                      </a>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {loading && checks !== null ? <div className="modal__note"><Loading label="Refreshing…" /></div> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThreadReply({ threadId, busy, onReply }: { threadId: string; busy: boolean; onReply: (threadId: string, body: string) => void }) {
+  const [draft, setDraft] = useState('');
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button className="btn btn--tiny thread__reply" type="button" disabled={busy} onClick={() => setOpen(true)}>
+        Reply
+      </button>
+    );
+  }
+  return (
+    <div className="thread__replybox">
+      <textarea
+        value={draft}
+        aria-label="Reply to this review thread"
+        placeholder="Reply…"
+        onChange={(event) => setDraft(event.target.value)}
+      />
+      <div className="thread__replyactions">
+        <button className="btn btn--tiny" type="button" onClick={() => { setOpen(false); setDraft(''); }}>
+          Cancel
+        </button>
+        <button
+          className="btn btn--tiny btn--primary"
+          type="button"
+          disabled={busy || !draft.trim()}
+          onClick={() => {
+            const body = draft.trim();
+            if (!body) {
+              return;
+            }
+            onReply(threadId, body);
+            setDraft('');
+            setOpen(false);
+          }}
+        >
+          Reply
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DetailPane({
   detail,
   loading,
@@ -842,13 +1343,18 @@ function DetailPane({
   hostLabel,
   labelOptions,
   reviewerOptions,
+  mergeMethod,
+  onMergeMethodChange,
   onComment,
   onSetState,
   onMerge,
+  onMarkReady,
+  onOpenChecks,
   onSetLabels,
   onSetReviewers,
   onReview,
   onVote,
+  onReply,
   onOpen,
   onCopy,
   onRefresh
@@ -860,13 +1366,18 @@ function DetailPane({
   hostLabel: string;
   labelOptions: BoardLabel[] | null;
   reviewerOptions: BoardAuthor[] | null;
+  mergeMethod: MergeMethod;
+  onMergeMethodChange: (method: MergeMethod) => void;
   onComment: (body: string) => void;
-  onSetState: (state: 'open' | 'closed') => void;
-  onMerge: (method: 'merge' | 'squash' | 'rebase') => void;
+  onSetState: (state: 'open' | 'closed', reason?: string) => void;
+  onMerge: (method: MergeMethod) => void;
+  onMarkReady: () => void;
+  onOpenChecks: () => void;
   onSetLabels: (names: string[]) => void;
   onSetReviewers: (names: string[]) => void;
   onReview: (verdict: 'approve' | 'request-changes') => void;
   onVote: (votes: Record<string, number>) => void;
+  onReply: (threadId: string, body: string) => void;
   onOpen: (url: string) => void;
   onCopy: (text: string) => void;
   onRefresh: () => void;
@@ -885,14 +1396,34 @@ function DetailPane({
     return <div className="detail detail--empty">Select an item to preview it.</div>;
   }
 
-  const actions = detail.canClose || detail.canReopen || detail.canMerge;
+  const actions = detail.canClose || detail.canReopen || detail.canMerge || detail.canMarkReady;
   const showFooter = detail.canComment || actions || detail.canReview;
   const reviewers = detail.reviewers ?? [];
-  const labelNames = new Set(detail.labels.map((label) => label.name));
-  const addableLabels = labelOptions?.filter((label) => !labelNames.has(label.name)) ?? [];
-  const reviewerLogins = new Set(reviewers.map((reviewer) => reviewer.login.toLowerCase()));
-  const addableReviewers = reviewerOptions?.filter((reviewer) => !reviewerLogins.has(reviewer.login.toLowerCase())) ?? [];
+  const reviewThreads = detail.reviewThreads ?? [];
   const voteLabels = (detail.voteLabels ?? []).filter((label) => label.permitted.length > 0);
+  const mergeMethods = (detail.mergeMethods ?? ['merge', 'squash']).filter(isMergeMethod);
+  const closeReasons = detail.canClose ? detail.closeReasons ?? [] : [];
+
+  const labelChoices: BoardLabel[] = [];
+  const seenLabels = new Set<string>();
+  for (const label of [...detail.labels, ...(labelOptions ?? [])]) {
+    if (!seenLabels.has(label.name)) {
+      seenLabels.add(label.name);
+      labelChoices.push(label);
+    }
+  }
+  const labelByKey = new Map(labelChoices.map((label) => [label.name, label]));
+
+  const reviewerChoices: BoardAuthor[] = [];
+  const seenReviewers = new Set<string>();
+  for (const reviewer of [...reviewers, ...(reviewerOptions ?? [])]) {
+    const key = reviewer.login.toLowerCase();
+    if (!seenReviewers.has(key)) {
+      seenReviewers.add(key);
+      reviewerChoices.push(reviewer);
+    }
+  }
+  const reviewerByKey = new Map(reviewerChoices.map((reviewer) => [reviewer.login.toLowerCase(), reviewer]));
   const canSubmitComment = detail.canComment && !busy && draft.trim().length > 0;
   const submitComment = () => {
     if (!canSubmitComment) {
@@ -907,6 +1438,18 @@ function DetailPane({
       <header className="detail__header">
         <div className="detail__kicker">
           <StateBadge kind={detail.kind} state={detail.state} draft={detail.draft} />
+          {detail.checks && detail.checks.total > 0 ? (
+            <button
+              type="button"
+              className={`checks-pill checks-pill--${checksTone(detail.checks)}`}
+              title="View checks"
+              aria-label={`View checks: ${detail.checks.passed} of ${detail.checks.total} passed`}
+              onClick={onOpenChecks}
+            >
+              <span className="checks-pill__dot" />
+              {detail.checks.passed}/{detail.checks.total} checks passed
+            </button>
+          ) : null}
           <span className="detail__ref">
             {repoLabel ? `${repoLabel} ` : ''}
             <span className="detail__number">#{detail.number}</span>
@@ -988,42 +1531,32 @@ function DetailPane({
           <dt>Labels</dt>
           <dd>
             {detail.labels.length > 0
-              ? detail.labels.map((label) => (
-                  <LabelChip
-                    key={label.name}
-                    {...label}
-                    disabled={busy}
-                    onRemove={
-                      detail.canEditLabels
-                        ? () => onSetLabels(detail.labels.filter((entry) => entry.name !== label.name).map((entry) => entry.name))
-                        : undefined
-                    }
-                  />
-                ))
+              ? detail.labels.map((label) => <LabelChip key={label.name} {...label} />)
               : <span className="meta__none">None</span>}
             {detail.canEditLabels ? (
               labelOptions === null ? (
                 <span className="meta__note">Loading labels…</span>
               ) : labelOptions.length === 0 ? (
                 <span className="meta__note">No labels available</span>
-              ) : addableLabels.length > 0 ? (
-                <label className="chip-add">
-                  <Icon name="plus" className="chip-add__icon" />
-                  <select
-                    value=""
-                    aria-label="Add label"
-                    disabled={busy}
-                    onChange={(event) => {
-                      if (!event.target.value) return;
-                      onSetLabels([...detail.labels.map((entry) => entry.name), event.target.value]);
-                    }}
-                  >
-                    <option value="" disabled>Add label</option>
-                    {addableLabels.map((label) => <option key={label.name} value={label.name}>{label.name}</option>)}
-                  </select>
-                  <Icon name="chevron" className="chip-add__chevron" />
-                </label>
-              ) : null
+              ) : (
+                <MultiSelect
+                  ariaLabel="Edit labels"
+                  disabled={busy}
+                  options={labelChoices.map((label) => ({
+                    key: label.name,
+                    label: label.name,
+                    node: <LabelChip name={label.name} color={label.color} />
+                  }))}
+                  selected={detail.labels.map((label) => label.name)}
+                  searchPlaceholder="Filter labels…"
+                  emptyMatchText="No matching labels"
+                  renderChip={(key, remove) => {
+                    const label = labelByKey.get(key);
+                    return label ? <LabelChip {...label} onRemove={remove} disabled={busy} /> : null;
+                  }}
+                  onApply={onSetLabels}
+                />
+              )
             ) : null}
           </dd>
           {detail.reviewers || detail.canEditReviewers ? (
@@ -1031,42 +1564,37 @@ function DetailPane({
               <dt>Reviewers</dt>
               <dd>
                 {reviewers.length > 0
-                  ? reviewers.map((reviewer) => (
-                      <ReviewerChip
-                        key={reviewer.login}
-                        author={reviewer}
-                        disabled={busy}
-                        onRemove={
-                          detail.canEditReviewers
-                            ? () => onSetReviewers(reviewers.filter((entry) => entry.login !== reviewer.login).map((entry) => entry.login))
-                            : undefined
-                        }
-                      />
-                    ))
+                  ? reviewers.map((reviewer) => <ReviewerChip key={reviewer.login} author={reviewer} />)
                   : <span className="meta__none">None</span>}
                 {detail.canEditReviewers ? (
                   reviewerOptions === null ? (
                     <span className="meta__note">Loading reviewers…</span>
                   ) : reviewerOptions.length === 0 ? (
                     <span className="meta__note">No reviewer candidates</span>
-                  ) : addableReviewers.length > 0 ? (
-                    <label className="chip-add">
-                      <Icon name="plus" className="chip-add__icon" />
-                      <select
-                        value=""
-                        aria-label="Add reviewer"
-                        disabled={busy}
-                        onChange={(event) => {
-                          if (!event.target.value) return;
-                          onSetReviewers([...reviewers.map((entry) => entry.login), event.target.value]);
-                        }}
-                      >
-                        <option value="" disabled>Add reviewer</option>
-                        {addableReviewers.map((reviewer) => <option key={reviewer.login} value={reviewer.login}>{reviewer.login}</option>)}
-                      </select>
-                      <Icon name="chevron" className="chip-add__chevron" />
-                    </label>
-                  ) : null
+                  ) : (
+                    <MultiSelect
+                      ariaLabel="Edit reviewers"
+                      disabled={busy}
+                      options={reviewerChoices.map((reviewer) => ({
+                        key: reviewer.login.toLowerCase(),
+                        label: reviewer.login,
+                        node: (
+                          <span className="picker__person">
+                            <Avatar author={reviewer} small />
+                            <span className="picker__login">{reviewer.login}</span>
+                          </span>
+                        )
+                      }))}
+                      selected={reviewers.map((reviewer) => reviewer.login.toLowerCase())}
+                      searchPlaceholder="Filter reviewers…"
+                      emptyMatchText="No matching reviewers"
+                      renderChip={(key, remove) => {
+                        const reviewer = reviewerByKey.get(key);
+                        return reviewer ? <ReviewerChip author={reviewer} onRemove={remove} disabled={busy} /> : null;
+                      }}
+                      onApply={(keys) => onSetReviewers(keys.map((key) => reviewerByKey.get(key)?.login ?? key))}
+                    />
+                  )
                 ) : null}
               </dd>
             </>
@@ -1074,6 +1602,33 @@ function DetailPane({
         </dl>
 
         <Markdown body={detail.body || '_No description._'} />
+
+        {reviewThreads.length > 0 ? (
+          <section className="threads" aria-label="Review threads">
+            <h2>
+              Review threads
+              <span className="threads__count">{reviewThreads.length}</span>
+            </h2>
+            {reviewThreads.map((thread) => (
+              <article key={thread.id} className="thread">
+                <header className="thread__head">
+                  <code className="thread__path">
+                    {thread.path ?? 'General'}
+                    {thread.line != null ? `:${thread.line}` : ''}
+                  </code>
+                  <span className={`thread__badge${thread.resolved ? ' thread__badge--resolved' : ''}`}>
+                    {thread.resolved ? 'Resolved' : 'Unresolved'}
+                  </span>
+                  <span className="thread__count">
+                    {thread.comments.length} comment{thread.comments.length === 1 ? '' : 's'}
+                  </span>
+                </header>
+                {thread.comments.map((comment) => <CommentView key={comment.id} comment={comment} />)}
+                <ThreadReply threadId={thread.id} busy={busy} onReply={onReply} />
+              </article>
+            ))}
+          </section>
+        ) : null}
 
         <section className="comments">
           <h2>{detail.comments.length} comment{detail.comments.length === 1 ? '' : 's'}</h2>
@@ -1105,26 +1660,22 @@ function DetailPane({
             {actions || detail.canReview ? (
               <div className="detail__itemactions">
                 {detail.canClose ? (
-                  <button className="btn" disabled={busy} onClick={() => onSetState('closed')}>Close</button>
+                  <CloseMenu kind={detail.kind} reasons={closeReasons} disabled={busy} onCloseState={(reason) => onSetState('closed', reason)} />
                 ) : null}
                 {detail.canReopen ? (
-                  <button className="btn" disabled={busy} onClick={() => onSetState('open')}>Reopen</button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => onSetState('open')}>Reopen</button>
+                ) : null}
+                {detail.canMarkReady ? (
+                  <button type="button" className="btn" disabled={busy} onClick={onMarkReady}>Ready for review</button>
                 ) : null}
                 {detail.canMerge ? (
-                  <>
-                    {(detail.mergeMethods ?? ['merge', 'squash'])
-                      .filter((method): method is 'merge' | 'squash' | 'rebase' => method === 'merge' || method === 'squash' || method === 'rebase')
-                      .map((method) => (
-                        <button
-                          key={method}
-                          className={`btn${method === 'merge' ? '' : ' btn--accent'}`}
-                          disabled={busy}
-                          onClick={() => onMerge(method)}
-                        >
-                          {method === 'merge' ? 'Merge' : method === 'squash' ? 'Squash & merge' : 'Rebase & merge'}
-                        </button>
-                      ))}
-                  </>
+                  <MergeButton
+                    methods={mergeMethods}
+                    method={mergeMethod}
+                    disabled={busy}
+                    onSelectMethod={onMergeMethodChange}
+                    onMerge={onMerge}
+                  />
                 ) : null}
                 {detail.canReview ? (
                   detail.reviewModel === 'votes' ? (
@@ -1195,6 +1746,55 @@ function DetailPane({
   );
 }
 
+function TrackerStateField({
+  detail,
+  states,
+  loading,
+  error,
+  disabled,
+  onSetState
+}: {
+  detail: BoardTrackerDetail;
+  states: BoardTrackerState[];
+  loading: boolean;
+  error?: string;
+  disabled: boolean;
+  onSetState: (itemId: string, stateId: string) => void;
+}) {
+  if (!detail.container) {
+    return <span>{detail.state ? detail.state.name : 'None'}</span>;
+  }
+
+  const currentValue =
+    detail.state?.id ?? states.find((state) => state.name === detail.state?.name)?.id ?? detail.state?.name ?? '';
+  const known = states.some((state) => (state.id ?? state.name) === currentValue);
+
+  return (
+    <>
+      <select
+        className="select state-select"
+        value={known ? currentValue : ''}
+        aria-label="Change state"
+        disabled={disabled || loading || states.length === 0}
+        onChange={(event) => {
+          if (event.target.value) {
+            onSetState(detail.id, event.target.value);
+          }
+        }}
+      >
+        {known ? null : <option value="">{detail.state?.name ?? 'No state'}</option>}
+        {states.map((state) => (
+          <option key={state.id ?? state.name} value={state.id ?? state.name}>
+            {state.name}
+          </option>
+        ))}
+      </select>
+      {loading ? <span className="meta__note">Loading states…</span> : null}
+      {error ? <span className="meta__note error">{error}</span> : null}
+    </>
+  );
+}
+
 function TrackerWorkspace({
   items,
   detail,
@@ -1205,11 +1805,17 @@ function TrackerWorkspace({
   narrow,
   listOpen,
   listWidth,
+  states,
+  statesLoading,
+  statesError,
+  busy,
   onListWidthChange,
   onCloseList,
   onSelect,
   onLoadMore,
-  onOpen
+  onSetState,
+  onOpen,
+  onComment
 }: {
   items: BoardTrackerItem[];
   detail: BoardTrackerDetail | null;
@@ -1220,12 +1826,19 @@ function TrackerWorkspace({
   narrow: boolean;
   listOpen: boolean;
   listWidth: number | null;
+  states: BoardTrackerState[];
+  statesLoading: boolean;
+  statesError?: string;
+  busy: boolean;
   onListWidthChange: (width: number) => void;
   onCloseList: () => void;
   onSelect: (item: BoardTrackerItem) => void;
   onLoadMore: () => void;
+  onSetState: (itemId: string, stateId: string) => void;
   onOpen: (url: string) => void;
+  onComment: (identifier: string, body: string) => void;
 }) {
+  const [draft, setDraft] = useState('');
   return (
     <Workspace
       narrow={narrow}
@@ -1267,7 +1880,16 @@ function TrackerWorkspace({
               <div className="detail__body">
                 <dl className="meta">
                   <dt>State</dt>
-                  <dd>{detail.state ? detail.state.name : 'None'}</dd>
+                  <dd>
+                    <TrackerStateField
+                      detail={detail}
+                      states={states}
+                      loading={statesLoading}
+                      error={statesError}
+                      disabled={busy || loading}
+                      onSetState={onSetState}
+                    />
+                  </dd>
                   <dt>Priority</dt>
                   <dd>{detail.priority}</dd>
                   <dt>Assignee</dt>
@@ -1280,6 +1902,30 @@ function TrackerWorkspace({
                 <section className="comments">
                   <h2>{detail.comments.length} comment{detail.comments.length === 1 ? '' : 's'}</h2>
                   {detail.comments.map((comment) => <CommentView key={comment.id} comment={comment} />)}
+                  <div className="composer">
+                    <textarea
+                      value={draft}
+                      aria-label="Comment on this work item"
+                      placeholder="Leave a comment…"
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
+                  </div>
+                  <div className="detail__footerbar">
+                    <button
+                      className="btn btn--primary"
+                      disabled={busy || !draft.trim()}
+                      onClick={() => {
+                        const body = draft.trim();
+                        if (!body) {
+                          return;
+                        }
+                        onComment(detail.identifier, body);
+                        setDraft('');
+                      }}
+                    >
+                      Comment
+                    </button>
+                  </div>
                 </section>
               </div>
             </div>
@@ -1321,6 +1967,14 @@ export function App() {
   const [detailError, setDetailError] = useState<string | undefined>();
   const [labelOptions, setLabelOptions] = useState<BoardLabel[] | null>(null);
   const [reviewerOptions, setReviewerOptions] = useState<BoardAuthor[] | null>(null);
+  const [mergeMethod, setMergeMethod] = useState<MergeMethod>(readStoredMergeMethod);
+  const [checksOpen, setChecksOpen] = useState(false);
+  const [checks, setChecks] = useState<BoardCheck[] | null>(null);
+  const [checksLoading, setChecksLoading] = useState(false);
+  const [checksError, setChecksError] = useState<string | undefined>();
+  const [trackerStates, setTrackerStates] = useState<BoardTrackerState[]>([]);
+  const [trackerStatesLoading, setTrackerStatesLoading] = useState(false);
+  const [trackerStatesError, setTrackerStatesError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | undefined>();
   const [narrow, setNarrow] = useState(false);
@@ -1336,6 +1990,10 @@ export function App() {
   const reviewersRequest = useRef(0);
   const trackerRequest = useRef(0);
   const trackerDetailRequest = useRef(0);
+  const checksRequest = useRef(0);
+  const trackerStatesRequest = useRef(0);
+  const trackerStatesContainer = useRef<string | null>(null);
+  const trackerOpenRef = useRef(false);
   const activeProvider = useRef<string | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
 
@@ -1349,6 +2007,10 @@ export function App() {
     setNarrow(node.getBoundingClientRect().width < NARROW_BREAKPOINT);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    trackerOpenRef.current = trackerOpen;
+  }, [trackerOpen]);
 
   useEffect(() => {
     if (narrow) {
@@ -1380,6 +2042,22 @@ export function App() {
       // Persisting the split width is best-effort.
     }
   }, [listWidth]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MERGE_METHOD_KEY, mergeMethod);
+    } catch {
+      // Persisting the merge method is best-effort.
+    }
+  }, [mergeMethod]);
+
+  useEffect(() => {
+    setChecksOpen(false);
+    setChecks(null);
+    setChecksError(undefined);
+    setChecksLoading(false);
+    checksRequest.current = 0;
+  }, [selected]);
 
   useEffect(() => {
     const off = onMessage((message) => {
@@ -1473,12 +2151,47 @@ export function App() {
         return;
       }
       if (message.type === 'trackerDetail') {
-        if (message.requestId !== trackerDetailRequest.current) {
+        // requestId 0 is an unsolicited reload (for example after a state write).
+        if (message.requestId !== 0 && message.requestId !== trackerDetailRequest.current) {
           return;
         }
-        setTrackerDetail(message.detail);
+        const next = message.detail;
+        setTrackerDetail(next);
         setTrackerLoading(false);
         setTrackerError(message.error);
+        const containerId = next?.container?.id ?? null;
+        if (containerId && containerId !== trackerStatesContainer.current) {
+          trackerStatesContainer.current = containerId;
+          trackerStatesRequest.current = ++requestId.current;
+          setTrackerStates([]);
+          setTrackerStatesError(undefined);
+          setTrackerStatesLoading(true);
+          post({ type: 'trackerStates', requestId: trackerStatesRequest.current, containerId });
+        } else if (!containerId && trackerStatesContainer.current !== null) {
+          trackerStatesContainer.current = null;
+          trackerStatesRequest.current = 0;
+          setTrackerStates([]);
+          setTrackerStatesError(undefined);
+          setTrackerStatesLoading(false);
+        }
+        return;
+      }
+      if (message.type === 'checks') {
+        if (message.requestId !== checksRequest.current) {
+          return;
+        }
+        setChecks(message.checks);
+        setChecksError(message.error);
+        setChecksLoading(false);
+        return;
+      }
+      if (message.type === 'trackerStates') {
+        if (message.requestId !== trackerStatesRequest.current) {
+          return;
+        }
+        setTrackerStates(message.states);
+        setTrackerStatesError(message.error);
+        setTrackerStatesLoading(false);
         return;
       }
       if (message.type === 'busy') {
@@ -1489,8 +2202,12 @@ export function App() {
       if (message.type === 'error') {
         setListLoading(false);
         setDetailLoading(false);
-        setListError(message.message);
-        setDetailError(message.message);
+        if (trackerOpenRef.current) {
+          setTrackerError(message.message);
+        } else {
+          setListError(message.message);
+          setDetailError(message.message);
+        }
       }
     });
     post({ type: 'ready' });
@@ -1559,6 +2276,11 @@ export function App() {
       setTrackerItems([]);
       setTrackerDetail(null);
       setTrackerSelected(null);
+      trackerStatesContainer.current = null;
+      trackerStatesRequest.current = 0;
+      setTrackerStates([]);
+      setTrackerStatesError(undefined);
+      setTrackerStatesLoading(false);
     }
     post({ type: 'trackerList', requestId: id, state, cursor: append ? trackerCursor : null });
   };
@@ -1578,6 +2300,21 @@ export function App() {
     const id = ++requestId.current;
     trackerDetailRequest.current = id;
     post({ type: 'trackerDetail', requestId: id, id: item.id });
+  };
+
+  const requestChecks = (number: number) => {
+    const id = ++requestId.current;
+    checksRequest.current = id;
+    setChecksLoading(true);
+    setChecksError(undefined);
+    post({ type: 'checks', requestId: id, number });
+  };
+
+  const openChecks = (number: number) => {
+    setChecksOpen(true);
+    setChecks(null);
+    setChecksError(undefined);
+    requestChecks(number);
   };
 
   const kinds = repo?.kinds ?? (['issue', 'pull', 'discussion'] as BoardKind[]);
@@ -1775,11 +2512,17 @@ export function App() {
               narrow={narrow}
               listOpen={listOpen}
               listWidth={listWidth}
+              states={trackerStates}
+              statesLoading={trackerStatesLoading}
+              statesError={trackerStatesError}
+              busy={busy}
               onListWidthChange={setListWidth}
               onCloseList={() => setListOpen(false)}
               onSelect={selectTrackerItem}
               onLoadMore={() => loadTracker(trackerState, true)}
+              onSetState={(itemId, stateId) => post({ type: 'trackerSetState', itemId, stateId })}
               onOpen={(url) => post({ type: 'openExternal', url })}
+              onComment={(identifier, body) => post({ type: 'trackerComment', identifier, body })}
             />
           ) : (
             <Workspace
@@ -1818,17 +2561,27 @@ export function App() {
                 hostLabel={repo?.providerLabel ?? 'GitHub'}
                 labelOptions={labelOptions}
                 reviewerOptions={reviewerOptions}
+                mergeMethod={mergeMethod}
+                onMergeMethodChange={setMergeMethod}
                 onComment={(body) => {
                   if (selected == null) return;
                   post({ type: 'comment', kind, number: selected, body });
                 }}
-                onSetState={(state) => {
+                onSetState={(state, reason) => {
                   if (selected == null) return;
-                  post({ type: 'setState', kind, number: selected, state });
+                  post({ type: 'setState', kind, number: selected, state, reason });
                 }}
                 onMerge={(method) => {
                   if (selected == null) return;
                   post({ type: 'merge', number: selected, method });
+                }}
+                onMarkReady={() => {
+                  if (selected == null) return;
+                  post({ type: 'markReady', number: selected });
+                }}
+                onOpenChecks={() => {
+                  if (detail == null) return;
+                  openChecks(detail.number);
                 }}
                 onSetLabels={(names) => {
                   if (selected == null) return;
@@ -1846,6 +2599,7 @@ export function App() {
                   if (selected == null) return;
                   post({ type: 'review', number: selected, votes });
                 }}
+                onReply={(threadId, body) => post({ type: 'reviewReply', threadId, body })}
                     onOpen={(url) => post({ type: 'openExternal', url })}
                     onCopy={(text) => post({ type: 'copy', text })}
                     onRefresh={() => post({ type: 'refresh' })}
@@ -1856,6 +2610,21 @@ export function App() {
           )}
         </>
       )}
+      {checksOpen ? (
+        <ChecksDialog
+          title={detail?.title ?? 'Pull request'}
+          checks={checks}
+          loading={checksLoading}
+          error={checksError}
+          onClose={() => setChecksOpen(false)}
+          onRefresh={() => {
+            if (detail) {
+              requestChecks(detail.number);
+            }
+          }}
+          onOpen={(url) => post({ type: 'openExternal', url })}
+        />
+      ) : null}
     </div>
   );
 }

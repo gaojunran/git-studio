@@ -6,6 +6,7 @@ import type {
   BoardTrackerItem,
   BoardTrackerListResult,
   BoardTrackerPriority,
+  BoardTrackerState,
   BoardTrackerStateCategory
 } from '../../../shared/board';
 import type { TrackerGuestRecord } from './store';
@@ -138,7 +139,21 @@ export class TrackerProvider {
       ...itemOf(answer.item),
       description: answer.item.description ?? null,
       comments: (answer.item.comments ?? []).map(commentOf),
-      children: (answer.item.children ?? []).map(itemOf)
+      children: (answer.item.children ?? []).map(itemOf),
+      canComment: true
     };
+  }
+
+  async states(containerId: string): Promise<BoardTrackerState[]> {
+    const answer = await this.call<{ states?: Array<{ id?: string; name: string; category?: BoardTrackerStateCategory }> }>('states.list', { containerId });
+    return (answer.states ?? []).map((state) => ({ id: state.id, name: state.name, category: state.category ?? null }));
+  }
+
+  async setState(id: string, stateId: string): Promise<void> {
+    await this.call('items.updateState', { id, stateId });
+  }
+
+  async comment(identifier: string, body: string): Promise<void> {
+    await this.call('comments.create', { identifier, body });
   }
 }

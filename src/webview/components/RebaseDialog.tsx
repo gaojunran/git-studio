@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RebaseAction, RebaseItem, RebasePlan } from '../../shared/protocol';
 
 interface Props {
@@ -26,6 +26,7 @@ function planError(items: RebaseItem[]): string | undefined {
 export function RebaseDialog(props: Props) {
   const { plan, onClose, onStart } = props;
   const [items, setItems] = useState<RebaseItem[]>([]);
+  const dragIndex = useRef<number | null>(null);
 
   useEffect(() => {
     setItems(plan?.items.map((item) => ({ ...item, message: item.message ?? item.subject })) ?? []);
@@ -67,6 +68,18 @@ export function RebaseDialog(props: Props) {
     });
   };
 
+  const moveTo = (from: number, to: number) => {
+    if (from === to) {
+      return;
+    }
+    setItems((previous) => {
+      const next = [...previous];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <div className="dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-label="Interactive rebase">
@@ -95,7 +108,22 @@ export function RebaseDialog(props: Props) {
 
             <div className="rebase-list">
               {items.map((item, index) => (
-                <div className="rebase-item" key={item.hash}>
+                <div
+                  className="rebase-item"
+                  key={item.hash}
+                  draggable
+                  onDragStart={() => {
+                    dragIndex.current = index;
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (dragIndex.current !== null) {
+                      moveTo(dragIndex.current, index);
+                      dragIndex.current = null;
+                    }
+                  }}
+                >
                   <div className="rebase-row">
                     <select
                       className="rebase-row__action"
@@ -137,11 +165,12 @@ export function RebaseDialog(props: Props) {
                   </div>
 
                   {item.action === 'reword' && (
-                    <input
+                    <textarea
                       className="rebase-row__message"
                       value={item.message ?? item.subject}
                       onChange={(event) => update(index, { message: event.target.value })}
                       spellCheck={false}
+                      rows={2}
                     />
                   )}
                 </div>

@@ -22,7 +22,16 @@ place to learn and one source of truth for repository state.
   is a real file URI, so it stays editable; untracked files are included as additions.
 - Two-ref diffs come in both flavours: `Compare Two Refs` (two-dot, full trees) and
   `Compare Two Refs with Merge Base` (three-dot, right side since divergence).
-- More diff commands: two refs, merge-base, stash, one file at two revisions, a folder, and unpushed commits.
+- More diff commands: two refs, merge-base, stash, one file at two revisions, a folder, unpushed and
+  incoming commits, tag vs previous tag, remote-tracking branches, and reflog entries.
+- Stash workbench: list, inspect as a native multi-file diff, apply, pop, drop, and create stashes
+  (all changes, include untracked, or staged only).
+- Reflog workbench: inspect HEAD or any branch, compare a moment with HEAD or another ref, reset --hard,
+  or restore it on a new branch. The rewrite undo journal is persisted across window reloads.
+- Worktree workbench: list path/branch/HEAD/dirty, open in the current or a new window, create from any
+  ref, remove and prune.
+- Folder and multi-path history, with the path range shown in the panel title.
+- Patch export/apply and history graph SVG export.
 - Detached HEAD (jj workflows) is handled: the merge-base command resolves the only branch containing
   HEAD, and asks when several branches match instead of failing.
 - Commit actions from the detail pane or a row right-click:
@@ -59,6 +68,19 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Compare File at Two Revisions…` | Diff one file between any two revisions. |
 | `Git Studio: Compare Folder with Working Tree…` | Diff a folder against a ref from their merge base; the working-tree side stays editable. |
 | `Git Studio: Compare Unpushed Commits…` | Diff `@{upstream}..HEAD` before pushing. |
+| `Git Studio: Compare Incoming Commits…` | Diff `HEAD..@{upstream}` to preview what a pull would bring. |
+| `Git Studio: Compare Tag with Previous Tag…` | Diff a tag against the previous tag by creation date. |
+| `Git Studio: Compare Against Remote Tracking Branch…` | Diff a remote-tracking branch in either direction. |
+| `Git Studio: Compare with Reflog Entry…` | Diff a reflog moment against HEAD. |
+| `Git Studio: Stash Workbench…` | List, inspect, apply, pop, drop or create stashes. |
+| `Git Studio: Reflog…` | Inspect reflog entries, compare, reset or restore on a branch. |
+| `Git Studio: Restore HEAD from Reflog…` | Move HEAD back to the previous reflog entry. |
+| `Git Studio: Worktrees…` | List, open, create, remove and prune worktrees. |
+| `Git Studio: Folder History` | History for an Explorer folder. |
+| `Git Studio: History for Selected Paths` | History for several selected files/folders as one path filter. |
+| `Git Studio: Export Patch…` | Write `git diff --binary` for a commit or range. |
+| `Git Studio: Apply Patch…` | Apply a patch with `--3way` behind the write coordinator. |
+| `Git Studio: Export History Graph (SVG)…` | Write the first 500 commits of the graph as SVG. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
 | `Git Studio: Open Issues & Pull Requests` | Open the board for the active repository. |
 | `Git Studio: Connect GitHub for Board` | Store a GitHub token for the board. |
@@ -106,13 +128,16 @@ branch are listed first inside each group, then the most recently updated ones.
 
 ## Issues and pull requests board
 
-The board opens as an editor panel and reads the active repository's remote. GitHub is built in;
-other hosts come from OpenChamber source-control integration packages.
+The board opens as an editor panel and reads the active repository's remote. GitHub, GitLab, Gitea and
+Gerrit are built in; other hosts come from OpenChamber source-control integration packages.
 
 - Tabs: issues, pull requests and, on GitHub, discussions. Installed tracker packages add a
-  **Tracker** tab with their work items, states, labels, assignees and comments (read-only).
+  **Tracker** tab with their work items, states, labels, assignees and comments.
 - Search and open/closed/all filter, paged list, split preview.
-- GitHub writes: comment, close/reopen, merge/squash, open on GitHub, copy link.
+- Labels and reviewers use searchable multi-select pickers; merge is one split button that remembers
+  the last method; close offers host-specific reasons; draft PRs can be marked ready.
+- Checks open in a dialog, review threads are shown and GitHub threads can be replied to.
+- Tracker items can change state and receive comments when the tracker declares those capabilities.
 - An installed integration package runs unmodified: Git Studio parses its `openchamber` manifest,
   starts its `service/main.js`, proxies the source-control wire and keeps the token in VS Code
   SecretStorage. The package never sees the token; its forge calls go through Git Studio's outbound
@@ -123,9 +148,10 @@ Integration packages are installed from a folder, a Git URL or a `.zip` / `.vsix
 **Update Integration Extension…**, which pulls and reloads its manifest. When more than one provider matches a repository,
 the provider selector in the board header switches between them.
 The first version supports the `source-control` role's reads plus comment, state, merge, labels,
-reviewers and review writes when the manifest declares those capabilities, and the `tracker` role's
-`items.list` / `items.get` reads. Tracker writes, chat-session actions and worktree creation are out of
-scope for this version.
+reviewers, review, votes and ready writes when the manifest declares those capabilities, and the
+`tracker` role's `items.list`, `items.get`, `items.updateState`, `states.list` and `comments.create`.
+Guest review-thread creation is not part of the OpenChamber provider contract; GitHub's built-in
+provider can reply to existing threads.
 
 ## Settings
 
@@ -139,6 +165,9 @@ scope for this version.
 | `gitStudio.annotate.enabled` | `false` | Enable blame annotations globally. |
 | `gitStudio.annotate.template` | `${authorName} · ${authorDateAgo} · ${summary}` | Annotation text. |
 | `gitStudio.annotate.ignoreWhitespace` | `true` | Pass `-w` to `git blame`. |
+| `gitStudio.annotate.detectCopies` | `false` | Pass `-C -C` to `git blame` (slower, detects copies). |
+| `gitStudio.annotate.ignoreRevsFile` | `""` | Path to `.git-blame-ignore-revs`, relative to the repository root. |
+| `gitStudio.remote.commitUrlTemplate` | `""` | Custom commit URL for self-hosted hosts; `{url}` and `{hash}` are substituted. |
 | `gitStudio.git.path` | `""` | Override the git executable. |
 
 ## Development

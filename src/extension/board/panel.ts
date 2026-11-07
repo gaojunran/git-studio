@@ -8,8 +8,11 @@ import type {
   BoardRepoInfo,
   BoardWebviewMessage
 } from '../../shared/board';
-import { pickRemoteUrl } from '../git/remote';
-import { GitHubProvider, parseGitHubRemote, type BoardProvider, type GitHubRepo } from './github';
+import { pickRemoteUrl, normalizeRemoteUrl } from '../git/remote';
+import { GitHubProvider, parseGitHubRemote, type BoardProvider } from './github';
+import { GitLabProvider, type GitLabRepo } from './gitlab';
+import { GiteaProvider, type GiteaRepo } from './gitea';
+import { GerritProvider, type GerritRepo } from './gerrit';
 import { GuestProvider, guestRepoFor } from './guest/provider';
 import { TrackerProvider } from './guest/tracker';
 import type { BoardContext } from './service';
@@ -18,6 +21,44 @@ import { renderBoardHtml } from '../host/html';
 import type { Services } from '../host/services';
 
 const TOKEN_KEY = 'gitStudio.board.githubToken';
+const GITLAB_TOKEN_KEY = 'gitStudio.board.gitlabToken';
+const GITEA_TOKEN_KEY = 'gitStudio.board.giteaToken';
+const GERRIT_TOKEN_KEY = 'gitStudio.board.gerritToken';
+
+interface HostRemote {
+  kind: 'gitlab' | 'gitea' | 'gerrit';
+  base: string;
+  owner: string;
+  name: string;
+}
+
+function parseHostRemote(raw: string | undefined): HostRemote | undefined {
+  const base = normalizeRemoteUrl(raw ?? '');
+  if (!base) {
+    return undefined;
+  }
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return undefined;
+  }
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (parts.length < 2) {
+    return undefined;
+  }
+  const host = url.hostname.toLowerCase();
+  const owner = parts[0];
+  const name = parts[1].replace(/\.git$/, '');
+  const kind = host.includes('gitlab')
+    ? 'gitlab'
+    : host.includes('gitea') || host.includes('forgejo') || host.includes('codeberg')
+      ? 'gitea'
+      : host.includes('gerrit')
+        ? 'gerrit'
+        : undefined;
+  return kind ? { kind, base: `${url.protocol}//${url.host}`, owner, name } : undefined;
+}
 
 interface BoardRemote {
   name: string;
@@ -104,6 +145,7 @@ export class BoardPanel {
   private trackers: BoardProviderInfo[] = [];
   private trackerId: string | null = null;
   private preferredTrackerId: string | null = null;
+  private lastTrackerItemId: string | null = null;
   private authenticated = false;
   private ready = false;
   private busy = false;
@@ -207,8 +249,25 @@ export class BoardPanel {
         return;
       case 'setState':
         await this.mutate(message.state === 'closed' ? 'Closing' : 'Reopening', () =>
-          this.requireProvider().setState(message.kind, message.number, message.state)
+          this.requireProvider().setState(message.kind, message.number, message.state, message.reason)
         );
+        return;
+      case 'markReady':
+        await this.mutate('Marking ready', () => {
+          const provider = this.requireProvider();
+          if (!provider.markReady) throw new Error('This provider cannot mark a change request ready.');
+          return provider.markReady(message.number);
+        });
+        return;
+      case 'checks':
+        await this.checks(message.requestId, message.number);
+        return;
+      case 'reviewReply':
+        await this.mutate('Replying', () => {
+          const provider = this.requireProvider();
+          if (!provider.replyReviewThread) throw new Error('This provider cannot reply to review threads.');
+          return provider.replyReviewThread(message.threadId, message.body);
+        });
         return;
       case 'merge':
         await this.mutate('Merging', () => this.requireProvider().merge(message.number, message.method));
@@ -272,6 +331,15 @@ export class BoardPanel {
       case 'trackerDetail':
         await this.trackerDetail(message.requestId, message.id);
         return;
+      case 'trackerStates':
+        await this.trackerStates(message.requestId, message.containerId);
+        return;
+      case 'trackerSetState':
+        await this.trackerSetState(message.itemId, message.stateId);
+        return;
+      case 'trackerComment':
+        await this.trackerComment(message.identifier, message.body);
+        return;
       case 'connectGithub':
         await this.connectGithub();
         return;
@@ -295,6 +363,29 @@ export class BoardPanel {
   private async connectProvider(providerId: string): Promise<void> {
     if (providerId === 'github') {
       await this.connectGithub();
+      return;
+    }
+    if (providerId === 'gitlab' || providerId === 'gitea' || providerId === 'gerrit') {
+      const host = parseHostRemote(this.remoteUrl());
+      if (!host) {
+        return;
+      }
+      const label = providerId === 'gitlab' ? 'GitLab' : providerId === 'gitea' ? 'Gitea' : 'Gerrit';
+      const token = await vscode.window.showInputBox({
+        title: `${label} token`,
+        prompt: `Token for ${host.base}. Stored in VS Code SecretStorage.`,
+        password: true,
+        ignoreFocusOut: true
+      });
+      if (!token) {
+        return;
+      }
+      await this.secrets.store(
+        providerId === 'gitlab' ? GITLAB_TOKEN_KEY : providerId === 'gitea' ? GITEA_TOKEN_KEY : GERRIT_TOKEN_KEY,
+        token
+      );
+      await this.refreshState();
+      await this.reload();
       return;
     }
     const record = this.board.guests.list().find((entry) => entry.role === 'source-control' && `ext-${entry.id}` === providerId);
@@ -338,15 +429,27 @@ export class BoardPanel {
   private async buildProvider(): Promise<void> {
     this.provider = undefined;
     this.repoInfo = null;
-    this.providers = [{ id: 'github', label: 'GitHub', kinds: ['issue', 'pull', 'discussion'], builtin: true }];
+    this.providers = [];
     this.providerId = null;
     this.authenticated = false;
 
     const remote = this.remoteUrl();
+    const github = parseGitHubRemote(remote);
+    const host = github ? undefined : parseHostRemote(remote);
     const guestMatches = this.board.guests.list()
       .filter((record) => record.role === 'source-control')
       .map((record) => ({ record, repo: guestRepoFor(record, remote) }))
       .filter((entry): entry is { record: SourceControlGuestRecord; repo: BoardRepoInfo } => Boolean(entry.repo));
+
+    if (github) {
+      this.providers.push({ id: 'github', label: 'GitHub', kinds: ['issue', 'pull', 'discussion'], builtin: true });
+    } else if (host?.kind === 'gitlab') {
+      this.providers.push({ id: 'gitlab', label: 'GitLab', kinds: ['issue', 'pull'], builtin: true });
+    } else if (host?.kind === 'gitea') {
+      this.providers.push({ id: 'gitea', label: 'Gitea', kinds: ['issue', 'pull'], builtin: true });
+    } else if (host?.kind === 'gerrit') {
+      this.providers.push({ id: 'gerrit', label: 'Gerrit', kinds: ['pull'], builtin: true });
+    }
     for (const { record, repo } of guestMatches) {
       this.providers.push({
         id: `ext-${record.id}`,
@@ -357,9 +460,14 @@ export class BoardPanel {
       });
     }
 
-    if (guestMatches.length > 0 && this.preferredProviderId !== 'github') {
-      const preferred = guestMatches.find((entry) => `ext-${entry.record.id}` === this.preferredProviderId);
-      const { record, repo } = preferred ?? guestMatches[0];
+    const chosenGuest = guestMatches.find((entry) => `ext-${entry.record.id}` === this.preferredProviderId)
+      ?? (this.preferredProviderId && this.preferredProviderId !== 'github' && this.preferredProviderId !== 'gitlab' && this.preferredProviderId !== 'gitea'
+        ? guestMatches[0]
+        : guestMatches[0]);
+    const preferGuest = Boolean(this.preferredProviderId?.startsWith('ext-') && chosenGuest)
+      || (guestMatches.length > 0 && !this.providers.some((entry) => entry.id === this.preferredProviderId));
+    if (preferGuest && chosenGuest) {
+      const { record, repo } = chosenGuest;
       this.providerId = `ext-${record.id}`;
       this.preferredProviderId = this.providerId;
       this.repoInfo = { ...repo, root: this.repo?.root ?? '' };
@@ -371,35 +479,60 @@ export class BoardPanel {
       return;
     }
 
-    const github: GitHubRepo | undefined = parseGitHubRemote(remote);
-    if (!github) {
+    if (github) {
+      this.providerId = 'github';
+      this.preferredProviderId = 'github';
+      const token = await this.secrets.get(TOKEN_KEY);
+      if (!token) {
+        this.repoInfo = {
+          root: this.repo?.root ?? '',
+          owner: github.owner,
+          name: github.name,
+          url: `https://github.com/${github.owner}/${github.name}`,
+          providerId: 'github',
+          providerLabel: 'GitHub',
+          kinds: ['issue', 'pull', 'discussion']
+        };
+        return;
+      }
+      const provider = new GitHubProvider(token, github);
+      provider.repo.root = this.repo?.root ?? '';
+      this.provider = provider;
+      this.repoInfo = provider.repo;
+      this.authenticated = true;
       return;
     }
 
-    this.providerId = 'github';
-    this.preferredProviderId = 'github';
-
-    const token = await this.secrets.get(TOKEN_KEY);
-    if (!token) {
+    if (host?.kind === 'gitlab' || host?.kind === 'gitea' || host?.kind === 'gerrit') {
+      const id = host.kind;
+      this.providerId = id;
+      this.preferredProviderId = id;
+      const token = await this.secrets.get(
+        id === 'gitlab' ? GITLAB_TOKEN_KEY : id === 'gitea' ? GITEA_TOKEN_KEY : GERRIT_TOKEN_KEY
+      );
+      const label = id === 'gitlab' ? 'GitLab' : id === 'gitea' ? 'Gitea' : 'Gerrit';
       this.repoInfo = {
         root: this.repo?.root ?? '',
-        owner: github.owner,
-        name: github.name,
-        url: `https://github.com/${github.owner}/${github.name}`,
-        providerId: 'github',
-        providerLabel: 'GitHub',
-        kinds: ['issue', 'pull', 'discussion']
+        owner: host.owner,
+        name: host.name,
+        url: `${host.base}/${host.owner}/${host.name}`,
+        providerId: id,
+        providerLabel: label,
+        kinds: id === 'gerrit' ? ['pull'] : ['issue', 'pull']
       };
-      this.providerId = 'github';
-      return;
+      if (!token) {
+        return;
+      }
+      const provider = id === 'gitlab'
+        ? new GitLabProvider(token, host as GitLabRepo)
+        : id === 'gitea'
+          ? new GiteaProvider(token, host as GiteaRepo)
+          : new GerritProvider(token, host as GerritRepo);
+      provider.repo.root = this.repo?.root ?? '';
+      this.provider = provider;
+      this.repoInfo = provider.repo;
+      this.authenticated = true;
     }
-
-    const provider = new GitHubProvider(token, github);
-    provider.repo.root = this.repo?.root ?? '';
-    this.provider = provider;
-    this.repoInfo = provider.repo;
-    this.providerId = provider.info.id;
-    this.authenticated = true;
   }
 
   private async refreshState(): Promise<void> {
@@ -458,6 +591,7 @@ export class BoardPanel {
   }
 
   private async trackerDetail(requestId: number, id: string): Promise<void> {
+    this.lastTrackerItemId = id;
     if (!this.tracker) {
       this.post({ type: 'trackerDetail', requestId, detail: null });
       return;
@@ -519,6 +653,71 @@ export class BoardPanel {
       this.post({ type: 'reviewers', requestId, reviewers });
     } catch (error) {
       this.post({ type: 'error', requestId, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async checks(requestId: number, number: number): Promise<void> {
+    try {
+      const provider = this.requireProvider();
+      const checks = provider.checks ? await provider.checks(number) : [];
+      this.post({ type: 'checks', requestId, checks });
+    } catch (error) {
+      this.post({ type: 'checks', requestId, checks: [], error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async trackerStates(requestId: number, containerId: string): Promise<void> {
+    if (!this.tracker) {
+      this.post({ type: 'trackerStates', requestId, states: [] });
+      return;
+    }
+    try {
+      const states = await this.tracker.states(containerId);
+      this.post({ type: 'trackerStates', requestId, states });
+    } catch (error) {
+      this.post({ type: 'trackerStates', requestId, states: [], error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async trackerComment(identifier: string, body: string): Promise<void> {
+    if (!this.tracker) {
+      return;
+    }
+    if (this.busy) {
+      return;
+    }
+    this.busy = true;
+    this.post({ type: 'busy', busy: true, operation: 'Commenting' });
+    try {
+      await this.tracker.comment(identifier, body);
+      this.post({ type: 'busy', busy: false });
+      if (this.lastTrackerItemId) {
+        const detail = await this.tracker.detail(this.lastTrackerItemId);
+        this.post({ type: 'trackerDetail', requestId: 0, detail });
+      }
+    } catch (error) {
+      this.post({ type: 'busy', busy: false });
+      this.post({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async trackerSetState(itemId: string, stateId: string): Promise<void> {
+    if (!this.tracker) {
+      return;
+    }
+    if (this.busy) {
+      return;
+    }
+    this.busy = true;
+    this.post({ type: 'busy', busy: true, operation: 'Updating state' });
+    try {
+      await this.tracker.setState(itemId, stateId);
+      this.post({ type: 'busy', busy: false });
+      const detail = await this.tracker.detail(itemId);
+      this.post({ type: 'trackerDetail', requestId: 0, detail });
+    } catch (error) {
+      this.post({ type: 'busy', busy: false });
+      this.post({ type: 'error', message: error instanceof Error ? error.message : String(error) });
     }
   }
 
