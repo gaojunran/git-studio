@@ -1,0 +1,11 @@
+src/**
+node_modules/**
+.vscode/**
+.git/**
+**/*.map
+**/*.test.ts
+tsconfig*.json
+vite.config.mts
+vitest.config.mts
+esbuild.mjs
+package-lock.json

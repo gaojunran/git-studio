@@ -1,0 +1,186 @@
+{
+  "name": "git-studio",
+  "displayName": "Git Studio",
+  "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "history",
+    "graph",
+    "blame",
+    "log"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitStudio.openHistory",
+        "title": "Open History",
+        "category": "Git Studio",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitStudio.fileHistory",
+        "title": "File History",
+        "category": "Git Studio",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitStudio.annotateFile",
+        "title": "Annotate File (Blame)",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.toggleAnnotate",
+        "title": "Toggle File Annotate",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.openCommit",
+        "title": "Open Commit in History",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.refresh",
+        "title": "Refresh",
+        "category": "Git Studio",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "gitStudio.openHistory",
+          "when": "scmProvider == git",
+          "group": "navigation@10"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "gitStudio.fileHistory",
+          "when": "scmProvider == git",
+          "group": "1_history@1"
+        },
+        {
+          "command": "gitStudio.annotateFile",
+          "when": "scmProvider == git",
+          "group": "1_history@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "gitStudio.fileHistory",
+          "when": "!explorerResourceIsFolder && resourceScheme == file",
+          "group": "9_git@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "gitStudio.fileHistory",
+          "when": "resourceScheme == file",
+          "group": "9_git@1"
+        },
+        {
+          "command": "gitStudio.annotateFile",
+          "when": "resourceScheme == file",
+          "group": "9_git@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "gitStudio.openHistory",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h"
+      }
+    ],
+    "configuration": {
+      "title": "Git Studio",
+      "properties": {
+        "gitStudio.history.pageSize": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "Commits loaded per page."
+        },
+        "gitStudio.history.defaultRefs": {
+          "type": "string",
+          "enum": [
+            "all",
+            "current"
+          ],
+          "default": "all",
+          "description": "Refs selected when the history panel opens."
+        },
+        "gitStudio.history.order": {
+          "type": "string",
+          "enum": [
+            "date",
+            "topo"
+          ],
+          "default": "date",
+          "description": "Default commit ordering."
+        },
+        "gitStudio.annotate.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show full-file blame annotations for the active editor."
+        },
+        "gitStudio.annotate.template": {
+          "type": "string",
+          "default": "${authorName} · ${authorDateAgo} · ${summary}",
+          "description": "Annotation template. Supports ${authorName}, ${authorEmail}, ${authorDate}, ${authorDateAgo}, ${summary}, ${shortHash}."
+        },
+        "gitStudio.annotate.ignoreWhitespace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ignore whitespace changes when computing blame."
+        },
+        "gitStudio.git.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the git executable. Empty uses the path resolved by the built-in Git extension."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:ext && npm run build:web",
+    "build:ext": "node esbuild.mjs",
+    "build:web": "vite build",
+    "watch": "concurrently -n ext,web -c blue,green \"node esbuild.mjs --watch\" \"vite build --watch\"",
+    "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
+    "test": "vitest run",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/vscode": "^1.95.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.0"
+  }
+}

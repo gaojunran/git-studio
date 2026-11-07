@@ -1,0 +1,299 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  CommitDetail,
+  CommitRow,
+  Filters,
+  GraphRow,
+  HostMessage,
+  InitState
+} from '../shared/protocol';
+import { getState, post, setState } from './vscode';
+import { Toolbar } from './components/Toolbar';
+import { CommitList } from './components/CommitList';
+import { DetailPane } from './components/DetailPane';
+
+interface PersistedState {
+  root: string;
+  filters: Filters;
+}
+
+export function App() {
+  const [init, setInit] = useState<InitState | null>(null);
+  const [filters, setFilters] = useState<Filters | null>(null);
+  const [rows, setRows] = useState<CommitRow[]>([]);
+  const [graph, setGraph] = useState<GraphRow[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [detail, setDetail] = useState<CommitDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [compare, setCompare] = useState<string | null>(null);
+  const [focusHash, setFocusHash] = useState<string | null>(null);
+
+  const pageSizeRef = useRef(500);
+  const requestIdRef = useRef(0);
+  const latestRequestRef = useRef(0);
+  const loadingRef = useRef(false);
+  const rowsRef = useRef<CommitRow[]>([]);
+  const hasMoreRef = useRef(false);
+  const filtersRef = useRef<Filters | null>(null);
+  const selectedRef = useRef<string | null>(null);
+  const runQueryRef = useRef<(next: Filters, append: boolean) => void>(() => undefined);
+
+  rowsRef.current = rows;
+  hasMoreRef.current = hasMore;
+  filtersRef.current = filters;
+  selectedRef.current = selected;
+
+  const runQuery = (next: Filters, append: boolean) => {
+    if (append && (loadingRef.current || !hasMoreRef.current)) {
+      return;
+    }
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    latestRequestRef.current = requestId;
+    loadingRef.current = true;
+    post({
+      type: 'query',
+      requestId,
+      append,
+      filters: next,
+      skip: append ? rowsRef.current.length : 0,
+      limit: pageSizeRef.current
+    });
+  };
+  runQueryRef.current = runQuery;
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<HostMessage>) => {
+      const message = event.data;
+
+      switch (message.type) {
+        case 'init': {
+          setInit(message.state);
+          pageSizeRef.current = message.state.pageSize;
+          const persisted = getState<PersistedState>();
+          const usable = persisted && persisted.root === message.state.repo.root ? persisted.filters : undefined;
+          const next = usable ?? message.state.filters;
+          setFilters(next);
+          break;
+        }
+        case 'commits': {
+          if (message.requestId < latestRequestRef.current) {
+            return;
+          }
+          loadingRef.current = false;
+          setRows((previous) => (message.append ? [...previous, ...message.rows] : message.rows));
+          setGraph(message.graph);
+          setHasMore(message.hasMore);
+          setStale(message.stale);
+          break;
+        }
+        case 'detail': {
+          if (message.hash !== selectedRef.current) {
+            return;
+          }
+          setDetail(message.detail);
+          setDetailError(message.error ?? null);
+          setDetailLoading(false);
+          break;
+        }
+        case 'filters': {
+          setFilters(message.filters);
+          break;
+        }
+        case 'focusCommit': {
+          setFocusHash(message.hash);
+          setSelected(message.hash);
+          setDetail(null);
+          setDetailLoading(true);
+          setDetailError(null);
+          post({ type: 'selectCommit', hash: message.hash });
+          break;
+        }
+        case 'busy': {
+          setBusy(message.busy);
+          if (!message.busy) {
+            loadingRef.current = false;
+          }
+          break;
+        }
+        case 'error': {
+          setError(message.message);
+          if (!message.requestId || message.requestId >= latestRequestRef.current) {
+            loadingRef.current = false;
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    post({ type: 'ready' });
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  useEffect(() => {
+    if (!filters || !init) {
+      return;
+    }
+
+    setState({ root: init.repo.root, filters } satisfies PersistedState);
+    const timer = setTimeout(() => {
+      setRows([]);
+      setGraph([]);
+      setSelected(null);
+      setDetail(null);
+      setDetailError(null);
+      setCompare(null);
+      setStale(false);
+      loadingRef.current = false;
+      runQueryRef.current(filters, false);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filters, init]);
+
+  useEffect(() => {
+    if (!focusHash) {
+      return;
+    }
+    if (rows.some((row) => row.hash === focusHash)) {
+      setFocusHash(null);
+      return;
+    }
+    if (hasMore && !loadingRef.current) {
+      runQueryRef.current(filtersRef.current ?? ({} as Filters), true);
+    }
+  }, [focusHash, rows, hasMore]);
+
+  const select = (hash: string) => {
+    if (selectedRef.current === hash) {
+      return;
+    }
+    setSelected(hash);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    post({ type: 'selectCommit', hash });
+  };
+
+  const toggleCompare = (hash: string) => {
+    setCompare((previous) => (previous === hash ? null : hash));
+  };
+
+  const changeFilters = (patch: Partial<Filters>) => {
+    setFilters((previous) => (previous ? { ...previous, ...patch } : previous));
+  };
+
+  const resetFilters = () => {
+    if (!filters) {
+      return;
+    }
+    changeFilters({
+      path: '',
+      author: '',
+      message: '',
+      regex: false,
+      caseSensitive: false,
+      firstParent: false,
+      noMerges: false,
+      since: '',
+      until: '',
+      order: 'date'
+    });
+  };
+
+  const graphWidth = useMemo(() => {
+    let maxLane = 0;
+    for (const row of graph) {
+      maxLane = Math.max(maxLane, row.lane);
+      for (const segment of row.segments) {
+        maxLane = Math.max(maxLane, segment.from, segment.to);
+      }
+    }
+    return 14 + maxLane * 14 + 14;
+  }, [graph]);
+
+  if (!init || !filters) {
+    return <div className="loading-screen">Loading history…</div>;
+  }
+
+  return (
+    <div className="app">
+      <Toolbar
+        repo={init.repo}
+        refs={init.refs}
+        filters={filters}
+        onChange={changeFilters}
+        onReset={resetFilters}
+        onPickRepo={() => post({ type: 'pickerRepo' })}
+        onPickRefs={() => post({ type: 'pickerRefs' })}
+        onRefresh={() => post({ type: 'refresh' })}
+        onOpenSettings={() => post({ type: 'openSettings' })}
+      />
+
+      {busy && <div className="progress" />}
+
+      {error && (
+        <div className="banner banner--error">
+          <span className="banner__text">{error}</span>
+          <button className="btn btn--small" onClick={() => setError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {stale && (
+        <div className="banner banner--warning">
+          <span className="banner__text">History changed while browsing. The loaded page may be out of date.</span>
+          <button className="btn btn--small" onClick={() => post({ type: 'refresh' })}>
+            Refresh
+          </button>
+        </div>
+      )}
+
+      <div className="main">
+        <CommitList
+          rows={rows}
+          graph={graph}
+          graphWidth={graphWidth}
+          hasMore={hasMore}
+          loading={busy}
+          selected={selected}
+          compare={compare}
+          onSelect={select}
+          onToggleCompare={toggleCompare}
+          onOpenCommit={(hash) => post({ type: 'openCommitChanges', hash })}
+          onLoadMore={() => runQueryRef.current(filters, true)}
+        />
+        <DetailPane
+          detail={detail}
+          loading={detailLoading}
+          error={detailError}
+          selected={selected}
+          compare={compare}
+          onSelectParent={select}
+          onOpenFileDiff={(file) =>
+            selected &&
+            post({
+              type: 'openFileDiff',
+              hash: selected,
+              path: file.path,
+              oldPath: file.oldPath,
+              status: file.status
+            })
+          }
+          onOpenFileHistory={(filePath) => selected && post({ type: 'openFileHistory', path: filePath, hash: selected })}
+          onOpenFileAtRevision={(filePath) => selected && post({ type: 'openFileAtRevision', hash: selected, path: filePath })}
+          onOpenChanges={() => selected && post({ type: 'openCommitChanges', hash: selected })}
+          onCompare={() => selected && compare && post({ type: 'compare', a: compare, b: selected })}
+          onCopy={(text) => post({ type: 'copy', text })}
+        />
+      </div>
+    </div>
+  );
+}
