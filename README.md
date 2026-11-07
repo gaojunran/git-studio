@@ -20,7 +20,10 @@ place to learn and one source of truth for repository state.
 - Commit actions from the detail pane or a row right-click:
   create branch here, create tag here, checkout (detached), compare with working tree,
   open on GitHub/GitLab/Bitbucket, copy subject or hash.
-- Read-only by default: no history rewriting.
+- History rewriting: reset (soft/mixed/hard), revert and cherry-pick from the same menu.
+  Merge commits use parent 1. Conflicts surface in a banner with an Abort action.
+- Write safety: operations are serialized, the target commit is re-resolved, and HEAD is
+  rechecked after confirmation; a merge/rebase/cherry-pick/revert in progress blocks new writes.
 
 ## Commands
 
@@ -63,9 +66,10 @@ Press `F5` in VS Code to launch an Extension Development Host.
 
 ```
 src/shared/protocol.ts     host <-> webview message contract
-src/extension/git/         git process runner, log/refs/diff/blame/commit readers
+src/extension/git/         git process runner, log/refs/diff/blame/commit/remote/write
 src/extension/graph/       pure lane layout for the commit graph
-src/extension/host/        repository service, history panel, webview HTML
+src/extension/history/     default ref selection for complex repositories
+src/extension/host/        repository service, history panel, commit actions, webview HTML
 src/extension/features/    blame decorations
 src/webview/               React history UI (virtual list + SVG graph)
 ```
@@ -91,7 +95,7 @@ graph at a handful of lanes instead of dozens.
 
 ## Limitations
 
-- No reset, revert, cherry-pick or interactive rebase yet.
+- No interactive rebase, commit message editing or squash yet.
 - Merge commit file lists use the selected parent's diff; rename detection is on.
 - `all` mode can be slow and wide on repositories with hundreds of refs; `primary` is the default for that reason.
 - The built-in Git extension must be enabled for repository discovery.

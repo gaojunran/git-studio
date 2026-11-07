@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { GitRunner } from './git/cli';
+import { WriteCoordinator } from './git/write';
 import { AnnotateController } from './features/annotate';
 import { HistoryPanel } from './host/historyPanel';
 import { RepoService } from './host/repoService';
@@ -28,9 +29,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await repoService.initialize();
 
   const runner = new GitRunner(repoService.gitPath, (line) => output.debug(line));
+  const writes = new WriteCoordinator(runner);
   const services: Services = {
     repoService,
     runner,
+    writes,
     output,
     extensionUri: context.extensionUri
   };

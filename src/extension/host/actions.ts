@@ -2,18 +2,34 @@ import * as vscode from 'vscode';
 import type { CommitDetail } from '../../shared/protocol';
 import { loadWorktreeFiles } from '../git/diff';
 import { commitUrl, pickRemoteUrl } from '../git/remote';
+import { detectOperation, headOid, isConflict, type Operation } from '../git/write';
 import type { RepoHandle } from './repoService';
 import type { Services } from './services';
 import { emptyUri, gitUri, worktreeUri } from './uris';
 
-type ActionId = 'branch' | 'tag' | 'checkout' | 'worktree' | 'remote' | 'copy-subject' | 'copy-hash';
+type ActionId =
+  | 'branch'
+  | 'tag'
+  | 'checkout'
+  | 'worktree'
+  | 'remote'
+  | 'copy-subject'
+  | 'copy-hash'
+  | 'reset'
+  | 'revert'
+  | 'cherry-pick'
+  | 'abort';
 
 interface ActionItem extends vscode.QuickPickItem {
-  id: ActionId;
+  id?: ActionId;
 }
 
 function shortHash(hash: string): string {
   return hash.slice(0, 7);
+}
+
+function mainlineOf(detail: CommitDetail | undefined): number | undefined {
+  return detail && detail.parents.length > 1 ? 1 : undefined;
 }
 
 export class CommitActionRunner {
@@ -22,24 +38,42 @@ export class CommitActionRunner {
   constructor(
     private readonly services: Services,
     private readonly getRepo: () => RepoHandle,
-    private readonly refresh: () => Promise<void>
+    private readonly onChanged: () => Promise<void>
   ) {}
 
   async show(hash: string, detail: CommitDetail | undefined): Promise<void> {
+    const repo = this.getRepo();
+    const operation = await detectOperation(this.services.runner, repo.root).catch(() => null);
+
     const items: ActionItem[] = [
       { id: 'branch', label: '$(git-branch) Create Branch Here…' },
       { id: 'tag', label: '$(tag) Create Tag Here…' },
       { id: 'checkout', label: '$(debug-disconnect) Checkout Commit (Detached)…' },
+      { kind: vscode.QuickPickItemKind.Separator, label: 'Rewrite' },
+      { id: 'reset', label: '$(discard) Reset Current Branch to Here…' },
+      { id: 'revert', label: '$(history) Revert Commit…' },
+      { id: 'cherry-pick', label: '$(git-commit) Cherry-pick onto Current Branch…' }
+    ];
+
+    if (operation) {
+      items.push(
+        { kind: vscode.QuickPickItemKind.Separator, label: 'In progress' },
+        { id: 'abort', label: `$(debug-stop) Abort ${operation}…` }
+      );
+    }
+
+    items.push(
+      { kind: vscode.QuickPickItemKind.Separator, label: '' },
       { id: 'worktree', label: '$(diff) Compare with Working Tree' },
       { id: 'remote', label: '$(globe) Open Commit on Remote' },
       { id: 'copy-subject', label: '$(copy) Copy Commit Subject' },
       { id: 'copy-hash', label: '$(copy) Copy Commit Hash' }
-    ];
+    );
 
     const picked = await vscode.window.showQuickPick(items, {
       placeHolder: `Commit ${shortHash(hash)}${detail?.message.split('\n')[0] ? ` · ${detail.message.split('\n')[0]}` : ''}`
     });
-    if (!picked) {
+    if (!picked?.id) {
       return;
     }
 
@@ -76,8 +110,25 @@ export class CommitActionRunner {
         case 'copy-hash':
           await vscode.env.clipboard.writeText(hash);
           break;
+        case 'reset':
+          await this.reset(hash);
+          break;
+        case 'revert':
+          await this.revert(hash, detail);
+          break;
+        case 'cherry-pick':
+          await this.cherryPick(hash, detail);
+          break;
+        case 'abort':
+          await this.abort();
+          break;
       }
     } catch (error) {
+      if (isConflict(error)) {
+        await this.onChanged();
+        await this.reportConflict(error);
+        return;
+      }
       void vscode.window.showErrorMessage(
         `Git Studio: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -99,7 +150,7 @@ export class CommitActionRunner {
     }
 
     await repo.repo.createBranch(name.trim(), true, hash);
-    await this.refresh();
+    await this.onChanged();
   }
 
   private async createTag(hash: string): Promise<void> {
@@ -128,7 +179,7 @@ export class CommitActionRunner {
 
     await this.services.runner.run(args, repo.root);
     await repo.repo.status();
-    await this.refresh();
+    await this.onChanged();
   }
 
   private async checkout(hash: string): Promise<void> {
@@ -148,7 +199,7 @@ export class CommitActionRunner {
       await this.services.runner.run(['checkout', '--detach', hash], repo.root);
       await repo.repo.status();
     }
-    await this.refresh();
+    await this.onChanged();
   }
 
   private async compareWithWorktree(hash: string): Promise<void> {
@@ -172,6 +223,113 @@ export class CommitActionRunner {
       `${shortHash(hash)} ↔ Working Tree`,
       entries
     );
+  }
+
+  private async reset(hash: string): Promise<void> {
+    const repo = this.getRepo();
+    const head = await headOid(this.services.runner, repo.root);
+    const branch = repo.repo.state.HEAD?.name ?? 'HEAD';
+
+    const mode = await vscode.window.showQuickPick(
+      [
+        { label: 'Soft', description: 'Move HEAD only; keep changes staged', value: 'soft' as const },
+        { label: 'Mixed', description: 'Move HEAD; keep changes unstaged', value: 'mixed' as const },
+        { label: 'Hard', description: 'Move HEAD and discard tracked changes', value: 'hard' as const }
+      ],
+      { placeHolder: `Reset ${branch} to ${shortHash(hash)}` }
+    );
+    if (!mode) {
+      return;
+    }
+
+    if (mode.value === 'hard') {
+      const answer = await vscode.window.showWarningMessage(
+        `Hard reset ${branch} to ${shortHash(hash)}? Tracked changes will be discarded (untracked files are kept).`,
+        { modal: true },
+        'Hard Reset'
+      );
+      if (answer !== 'Hard Reset') {
+        return;
+      }
+    }
+
+    await this.services.writes.reset(repo.root, hash, mode.value, head);
+    await this.onChanged();
+    void vscode.window.showInformationMessage(`Git Studio: reset ${branch} to ${shortHash(hash)} (${mode.value}).`);
+  }
+
+  private async revert(hash: string, detail: CommitDetail | undefined): Promise<void> {
+    const repo = this.getRepo();
+    const head = await headOid(this.services.runner, repo.root);
+    const answer = await vscode.window.showWarningMessage(
+      `Revert ${shortHash(hash)}? This creates a new commit on ${repo.repo.state.HEAD?.name ?? 'HEAD'}.`,
+      { modal: true },
+      'Revert'
+    );
+    if (answer !== 'Revert') {
+      return;
+    }
+
+    await this.services.writes.revert(repo.root, hash, head, mainlineOf(detail));
+    await this.onChanged();
+    void vscode.window.showInformationMessage(`Git Studio: reverted ${shortHash(hash)}.`);
+  }
+
+  private async cherryPick(hash: string, detail: CommitDetail | undefined): Promise<void> {
+    const repo = this.getRepo();
+    const head = await headOid(this.services.runner, repo.root);
+    const branch = repo.repo.state.HEAD?.name ?? 'HEAD';
+    const answer = await vscode.window.showWarningMessage(
+      `Cherry-pick ${shortHash(hash)} onto ${branch}?`,
+      { modal: true },
+      'Cherry-pick'
+    );
+    if (answer !== 'Cherry-pick') {
+      return;
+    }
+
+    await this.services.writes.cherryPick(repo.root, hash, head, mainlineOf(detail));
+    await this.onChanged();
+    void vscode.window.showInformationMessage(`Git Studio: cherry-picked ${shortHash(hash)} onto ${branch}.`);
+  }
+
+  private async abort(): Promise<void> {
+    const repo = this.getRepo();
+    const operation = await detectOperation(this.services.runner, repo.root);
+    if (!operation) {
+      return;
+    }
+
+    const answer = await vscode.window.showWarningMessage(
+      `Abort the ${operation} in progress?`,
+      { modal: true },
+      'Abort'
+    );
+    if (answer !== 'Abort') {
+      return;
+    }
+
+    await this.services.writes.abort(repo.root);
+    await this.onChanged();
+    void vscode.window.showInformationMessage(`Git Studio: aborted ${operation}.`);
+  }
+
+  private async reportConflict(error: unknown): Promise<void> {
+    const repo = this.getRepo();
+    const operation: Operation = await detectOperation(this.services.runner, repo.root).catch(() => null);
+    const firstLine = error instanceof Error ? error.message.split('\n')[0] : String(error);
+
+    const choice = await vscode.window.showWarningMessage(
+      `Git Studio: ${operation ?? 'Operation'} stopped with conflicts. ${firstLine}`,
+      'Show Conflicts',
+      'Abort'
+    );
+    if (choice === 'Show Conflicts') {
+      await vscode.commands.executeCommand('workbench.view.scm');
+    } else if (choice === 'Abort') {
+      await this.services.writes.abort(repo.root);
+      await this.onChanged();
+    }
   }
 
   private async openOnRemote(hash: string): Promise<void> {

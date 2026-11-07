@@ -23,6 +23,7 @@ export function App() {
   const [rows, setRows] = useState<CommitRow[]>([]);
   const [graph, setGraph] = useState<GraphRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
+  const [operation, setOperation] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export function App() {
       switch (message.type) {
         case 'init': {
           setInit(message.state);
+          setOperation(message.state.operation);
           pageSizeRef.current = message.state.pageSize;
           const persisted = getState<PersistedState>();
           const usable = !initializedRef.current && persisted && persisted.root === message.state.repo.root
@@ -135,6 +137,9 @@ export function App() {
           }
           break;
         }
+        case 'operation':
+          setOperation(message.operation);
+          break;
         case 'error': {
           setError(message.message);
           if (!message.requestId || message.requestId >= latestRequestRef.current) {
@@ -256,6 +261,17 @@ export function App() {
           <span className="banner__text">History changed while browsing. The loaded page may be out of date.</span>
           <button className="btn btn--small" onClick={() => post({ type: 'refresh' })}>
             Refresh
+          </button>
+        </div>
+      )}
+
+      {operation && (
+        <div className="banner banner--warning">
+          <span className="banner__text">
+            {operation} in progress — resolve conflicts in Source Control, or abort.
+          </span>
+          <button className="btn btn--small" onClick={() => post({ type: 'abortOperation' })}>
+            Abort {operation}
           </button>
         </div>
       )}

@@ -101,6 +101,8 @@ export interface InitState {
   filters: Filters;
   filePath: string | null;
   pageSize: number;
+  /** Merge, rebase, cherry-pick or revert currently in progress. */
+  operation: string | null;
 }
 
 export interface CommitQuery {
@@ -115,6 +117,7 @@ export type HostMessage =
   | { type: 'detail'; hash: string; detail: CommitDetail | null; error?: string }
   | { type: 'filters'; filters: Filters }
   | { type: 'focusCommit'; hash: string }
+  | { type: 'operation'; operation: string | null }
   | { type: 'busy'; busy: boolean }
   | { type: 'error'; requestId?: number; message: string };
 
@@ -125,6 +128,7 @@ export type WebviewMessage =
   | { type: 'openFileDiff'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'commitActions'; hash: string }
+  | { type: 'abortOperation' }
   | { type: 'compare'; a: string; b: string }
   | { type: 'openFileHistory'; path: string; hash: string }
   | { type: 'openFileAtRevision'; hash: string; path: string }

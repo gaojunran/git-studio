@@ -14,6 +14,7 @@ import { loadCommitDetail } from '../git/commit';
 import { loadDiffFiles } from '../git/diff';
 import { loadCommits, type LogQuery } from '../git/log';
 import { loadRefs } from '../git/refs';
+import { detectOperation } from '../git/write';
 import { selectDefaultRefs, type DefaultRefMode } from '../history/defaultRefs';
 import { layoutGraph } from '../graph/layout';
 import { CommitActionRunner } from './actions';
@@ -137,7 +138,7 @@ export class HistoryPanel {
       this.filters.path = this.filePath;
     }
     this.pendingFocus = options.focus;
-    this.actions = new CommitActionRunner(services, () => this.repo, () => this.refresh());
+    this.actions = new CommitActionRunner(services, () => this.repo, () => this.afterWrite());
     this.bindRepo();
 
     this.panel.webview.html = renderHtml(panel.webview, services.extensionUri);
@@ -232,6 +233,9 @@ export class HistoryPanel {
         case 'commitActions':
           await this.actions.show(message.hash, await this.detailFor(message.hash));
           break;
+        case 'abortOperation':
+          await this.abortOperation();
+          break;
         case 'compare':
           await this.compare(message.a, message.b);
           break;
@@ -272,6 +276,7 @@ export class HistoryPanel {
     }
 
     const pageSize = vscode.workspace.getConfiguration('gitStudio').get<number>('history.pageSize', PAGE_SIZE);
+    const operation = await detectOperation(this.services.runner, this.repo.root).catch(() => null);
     if (!this.refsInitialized || this.refsSource === 'default') {
       this.filters.refs = this.defaultRefs();
       this.refsInitialized = true;
@@ -287,7 +292,8 @@ export class HistoryPanel {
         refs: this.refs,
         filters: this.filters,
         filePath: this.filePath ?? null,
-        pageSize: Math.max(50, Math.min(5000, pageSize))
+        pageSize: Math.max(50, Math.min(5000, pageSize)),
+        operation
       }
     });
   }
@@ -652,6 +658,31 @@ export class HistoryPanel {
     this.panel.title = 'Git History';
     await this.sendInit();
     this.post({ type: 'filters', filters: this.filters });
+  }
+
+  private async abortOperation(): Promise<void> {
+    const operation = await detectOperation(this.services.runner, this.repo.root);
+    if (!operation) {
+      this.post({ type: 'operation', operation: null });
+      return;
+    }
+
+    const answer = await vscode.window.showWarningMessage(`Abort the ${operation} in progress?`, { modal: true }, 'Abort');
+    if (answer !== 'Abort') {
+      return;
+    }
+
+    await this.services.writes.abort(this.repo.root);
+    await this.afterWrite();
+  }
+
+  private async afterWrite(): Promise<void> {
+    try {
+      await this.repo.repo.status();
+    } catch (error) {
+      this.services.output.warn(`status refresh failed: ${errorText(error)}`);
+    }
+    await this.refresh();
   }
 
   static async refreshCurrent(): Promise<void> {
