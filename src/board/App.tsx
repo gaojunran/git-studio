@@ -322,7 +322,7 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
 
 function Markdown({ body }: { body: string }) {
   const blocks = useMemo(() => {
-    const lines = body.split('\n');
+    const lines = body.replace(/\r\n?/g, '\n').split('\n');
     const output: ReactNode[] = [];
     let index = 0;
     let key = 0;
@@ -380,6 +380,10 @@ function Markdown({ body }: { body: string }) {
       const paragraph: string[] = [];
       while (index < lines.length && lines[index].trim() !== '' && !/^(#{1,6})\s+|^\s*[-*]\s+|^\s*\d+[.)]\s+|^\s*>|^```/.test(lines[index])) {
         paragraph.push(lines[index]);
+        index += 1;
+      }
+      if (paragraph.length === 0) {
+        paragraph.push(line);
         index += 1;
       }
       output.push(<p key={key++}>{inline(paragraph.join('\n'), `p${key}`)}</p>);
