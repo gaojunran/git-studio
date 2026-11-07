@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
+  BoardAuthor,
   BoardComment,
   BoardItemDetail,
   BoardItemSummary,
   BoardKind,
+  BoardLabel,
   BoardProviderInfo,
   BoardRepoInfo,
   BoardStateFilter
@@ -26,6 +28,7 @@ type IconName =
   | 'discussion'
   | 'record'
   | 'search'
+  | 'plus'
   | 'chevron'
   | 'refresh'
   | 'comment'
@@ -88,6 +91,7 @@ const ICONS: Record<IconName, ReactNode> = {
       <path d="m10.5 10.5 3 3" />
     </>
   ),
+  plus: <path d="M8 3.4v9.2M3.4 8h9.2" />,
   chevron: <path d="m4.5 6.2 3.5 3.6 3.5-3.6" />,
   refresh: (
     <>
@@ -251,11 +255,37 @@ function StateBadge({ kind, state, draft }: { kind: BoardKind; state: BoardItemD
   );
 }
 
-function LabelChip({ name, color }: { name: string; color?: string | null }) {
+function LabelChip({ name, color, onRemove, disabled }: { name: string; color?: string | null; onRemove?: () => void; disabled?: boolean }) {
   return (
     <span className="label">
       <span className="label__dot" style={color ? { background: `#${color.replace(/^#/, '')}` } : undefined} />
       <span className="label__name">{name}</span>
+      {onRemove ? (
+        <button type="button" className="label__remove" aria-label={`Remove label ${name}`} title={`Remove label ${name}`} disabled={disabled} onClick={onRemove}>
+          <Icon name="close" />
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+function ReviewerChip({ author, onRemove, disabled }: { author: BoardAuthor; onRemove?: () => void; disabled?: boolean }) {
+  return (
+    <span className="reviewer">
+      <Avatar author={author} small />
+      <span className="reviewer__login">{author.login}</span>
+      {onRemove ? (
+        <button
+          type="button"
+          className="reviewer__remove"
+          aria-label={`Remove reviewer ${author.login}`}
+          title={`Remove reviewer ${author.login}`}
+          disabled={disabled}
+          onClick={onRemove}
+        >
+          <Icon name="close" />
+        </button>
+      ) : null}
     </span>
   );
 }
@@ -410,9 +440,14 @@ function DetailPane({
   busy,
   repoLabel,
   hostLabel,
+  labelOptions,
+  reviewerOptions,
   onComment,
   onSetState,
   onMerge,
+  onSetLabels,
+  onSetReviewers,
+  onReview,
   onOpen,
   onCopy
 }: {
@@ -421,9 +456,14 @@ function DetailPane({
   busy: boolean;
   repoLabel: string;
   hostLabel: string;
+  labelOptions: BoardLabel[] | null;
+  reviewerOptions: BoardAuthor[] | null;
   onComment: (body: string) => void;
   onSetState: (state: 'open' | 'closed') => void;
   onMerge: (method: 'merge' | 'squash' | 'rebase') => void;
+  onSetLabels: (names: string[]) => void;
+  onSetReviewers: (names: string[]) => void;
+  onReview: (verdict: 'approve' | 'request-changes') => void;
   onOpen: (url: string) => void;
   onCopy: (text: string) => void;
 }) {
@@ -437,6 +477,12 @@ function DetailPane({
   }
 
   const actions = detail.canClose || detail.canReopen || detail.canMerge;
+  const showFooter = detail.canComment || actions || detail.canReview;
+  const reviewers = detail.reviewers ?? [];
+  const labelNames = new Set(detail.labels.map((label) => label.name));
+  const addableLabels = labelOptions?.filter((label) => !labelNames.has(label.name)) ?? [];
+  const reviewerLogins = new Set(reviewers.map((reviewer) => reviewer.login.toLowerCase()));
+  const addableReviewers = reviewerOptions?.filter((reviewer) => !reviewerLogins.has(reviewer.login.toLowerCase())) ?? [];
 
   return (
     <div className="detail">
@@ -515,9 +561,89 @@ function DetailPane({
           <dt>Labels</dt>
           <dd>
             {detail.labels.length > 0
-              ? detail.labels.map((label) => <LabelChip key={label.name} {...label} />)
+              ? detail.labels.map((label) => (
+                  <LabelChip
+                    key={label.name}
+                    {...label}
+                    disabled={busy}
+                    onRemove={
+                      detail.canEditLabels
+                        ? () => onSetLabels(detail.labels.filter((entry) => entry.name !== label.name).map((entry) => entry.name))
+                        : undefined
+                    }
+                  />
+                ))
               : <span className="meta__none">None</span>}
+            {detail.canEditLabels ? (
+              labelOptions === null ? (
+                <span className="meta__note">Loading labels…</span>
+              ) : labelOptions.length === 0 ? (
+                <span className="meta__note">No labels available</span>
+              ) : addableLabels.length > 0 ? (
+                <label className="chip-add">
+                  <Icon name="plus" className="chip-add__icon" />
+                  <select
+                    value=""
+                    aria-label="Add label"
+                    disabled={busy}
+                    onChange={(event) => {
+                      if (!event.target.value) return;
+                      onSetLabels([...detail.labels.map((entry) => entry.name), event.target.value]);
+                    }}
+                  >
+                    <option value="" disabled>Add label</option>
+                    {addableLabels.map((label) => <option key={label.name} value={label.name}>{label.name}</option>)}
+                  </select>
+                  <Icon name="chevron" className="chip-add__chevron" />
+                </label>
+              ) : null
+            ) : null}
           </dd>
+          {detail.reviewers || detail.canEditReviewers ? (
+            <>
+              <dt>Reviewers</dt>
+              <dd>
+                {reviewers.length > 0
+                  ? reviewers.map((reviewer) => (
+                      <ReviewerChip
+                        key={reviewer.login}
+                        author={reviewer}
+                        disabled={busy}
+                        onRemove={
+                          detail.canEditReviewers
+                            ? () => onSetReviewers(reviewers.filter((entry) => entry.login !== reviewer.login).map((entry) => entry.login))
+                            : undefined
+                        }
+                      />
+                    ))
+                  : <span className="meta__none">None</span>}
+                {detail.canEditReviewers ? (
+                  reviewerOptions === null ? (
+                    <span className="meta__note">Loading reviewers…</span>
+                  ) : reviewerOptions.length === 0 ? (
+                    <span className="meta__note">No reviewer candidates</span>
+                  ) : addableReviewers.length > 0 ? (
+                    <label className="chip-add">
+                      <Icon name="plus" className="chip-add__icon" />
+                      <select
+                        value=""
+                        aria-label="Add reviewer"
+                        disabled={busy}
+                        onChange={(event) => {
+                          if (!event.target.value) return;
+                          onSetReviewers([...reviewers.map((entry) => entry.login), event.target.value]);
+                        }}
+                      >
+                        <option value="" disabled>Add reviewer</option>
+                        {addableReviewers.map((reviewer) => <option key={reviewer.login} value={reviewer.login}>{reviewer.login}</option>)}
+                      </select>
+                      <Icon name="chevron" className="chip-add__chevron" />
+                    </label>
+                  ) : null
+                ) : null}
+              </dd>
+            </>
+          ) : null}
         </dl>
 
         <Markdown body={detail.body || '_No description._'} />
@@ -528,7 +654,7 @@ function DetailPane({
         </section>
       </div>
 
-      {detail.canComment || actions ? (
+      {showFooter ? (
         <footer className="detail__footer">
           {detail.canComment ? (
             <div className="composer">
@@ -543,7 +669,7 @@ function DetailPane({
             <p className="detail__closed">Comments are not available for this item.</p>
           )}
           <div className="detail__footerbar">
-            {actions ? (
+            {actions || detail.canReview ? (
               <div className="detail__itemactions">
                 {detail.canClose ? (
                   <button className="btn" disabled={busy} onClick={() => onSetState('closed')}>Close</button>
@@ -566,6 +692,16 @@ function DetailPane({
                         </button>
                       ))}
                   </>
+                ) : null}
+                {detail.canReview ? (
+                  detail.reviewModel === 'votes' ? (
+                    <span className="detail__note">Votes are not supported yet.</span>
+                  ) : (
+                    <>
+                      <button className="btn btn--approve" disabled={busy} onClick={() => onReview('approve')}>Approve</button>
+                      <button className="btn" disabled={busy} onClick={() => onReview('request-changes')}>Request changes</button>
+                    </>
+                  )
                 ) : null}
               </div>
             ) : null}
@@ -606,11 +742,16 @@ export function App() {
   const [detail, setDetail] = useState<BoardItemDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | undefined>();
+  const [labelOptions, setLabelOptions] = useState<BoardLabel[] | null>(null);
+  const [reviewerOptions, setReviewerOptions] = useState<BoardAuthor[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | undefined>();
   const requestId = useRef(0);
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
+  const detailKey = useRef<string | null>(null);
+  const labelsRequest = useRef(0);
+  const reviewersRequest = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -637,9 +778,42 @@ export function App() {
         if (message.requestId !== 0 && message.requestId !== detailRequest.current) {
           return;
         }
-        setDetail(message.detail);
+        const next = message.detail;
+        const key = next ? `${next.kind}-${next.number}` : null;
+        if (key === null || key !== detailKey.current) {
+          setLabelOptions(null);
+          setReviewerOptions(null);
+        }
+        detailKey.current = key;
+        setDetail(next);
         setDetailLoading(false);
         setDetailError(message.error);
+        labelsRequest.current = 0;
+        reviewersRequest.current = 0;
+        if (next?.canEditLabels) {
+          const id = ++requestId.current;
+          labelsRequest.current = id;
+          post({ type: 'listLabels', requestId: id });
+        }
+        if (next?.canEditReviewers) {
+          const id = ++requestId.current;
+          reviewersRequest.current = id;
+          post({ type: 'listReviewers', requestId: id });
+        }
+        return;
+      }
+      if (message.type === 'labels') {
+        if (message.requestId !== labelsRequest.current) {
+          return;
+        }
+        setLabelOptions(message.labels);
+        return;
+      }
+      if (message.type === 'reviewers') {
+        if (message.requestId !== reviewersRequest.current) {
+          return;
+        }
+        setReviewerOptions(message.reviewers);
         return;
       }
       if (message.type === 'busy') {
@@ -856,6 +1030,8 @@ export function App() {
                 busy={busy}
                 repoLabel={repoLabel}
                 hostLabel={repo?.providerLabel ?? 'GitHub'}
+                labelOptions={labelOptions}
+                reviewerOptions={reviewerOptions}
                 onComment={(body) => {
                   if (selected == null) return;
                   post({ type: 'comment', kind, number: selected, body });
@@ -867,6 +1043,18 @@ export function App() {
                 onMerge={(method) => {
                   if (selected == null) return;
                   post({ type: 'merge', number: selected, method });
+                }}
+                onSetLabels={(names) => {
+                  if (selected == null) return;
+                  post({ type: 'setLabels', number: selected, names });
+                }}
+                onSetReviewers={(names) => {
+                  if (selected == null) return;
+                  post({ type: 'setReviewers', number: selected, names });
+                }}
+                onReview={(verdict) => {
+                  if (selected == null) return;
+                  post({ type: 'review', number: selected, verdict });
                 }}
                 onOpen={(url) => post({ type: 'openExternal', url })}
                 onCopy={(text) => post({ type: 'copy', text })}

@@ -1,4 +1,5 @@
 import type {
+  BoardAuthor,
   BoardComment,
   BoardItemDetail,
   BoardItemSummary,
@@ -55,6 +56,7 @@ interface ScChangeRequest extends Omit<ScIssue, 'state'> {
   head: string;
   headSha?: string;
   mergeable?: boolean | null;
+  reviewers?: ScUser[];
   additions?: number;
   deletions?: number;
 }
@@ -321,6 +323,14 @@ export class GuestProvider implements BoardProvider {
       deletions: pull.deletions ?? null,
       mergeable: pull.mergeable ?? null,
       mergeMethods: methods,
+      reviewers: (pull.reviewers ?? []).flatMap((user) => {
+        const author = loginOf(user);
+        return author ? [author] : [];
+      }),
+      canEditLabels: capabilities.labels === true,
+      canEditReviewers: capabilities.reviewers === true,
+      canReview: capabilities.reviews === true,
+      reviewModel: capabilities.reviewModel ?? 'verdict',
       canComment: capabilities.comments === true,
       canClose: capabilities.state === true && pull.state === 'open',
       canReopen: capabilities.state === true && pull.state === 'closed',
@@ -359,6 +369,55 @@ export class GuestProvider implements BoardProvider {
       { method },
       this.mutationContext({ number, head: detail.head, base: detail.base, headSha: detail.headSha }),
       '/pr/merge'
+    );
+  }
+
+  async listLabels(): Promise<BoardItemSummary['labels']> {
+    const result = (await this.call('listLabels', {
+      project: { owner: this.repo.owner, name: this.repo.name }
+    })) as ScLabel[] | { labels?: ScLabel[] };
+    const labels = Array.isArray(result) ? result : result.labels ?? [];
+    return labelsOf(labels);
+  }
+
+  async listReviewerCandidates(): Promise<BoardAuthor[]> {
+    const result = (await this.call('listReviewerCandidates', {
+      project: { owner: this.repo.owner, name: this.repo.name }
+    })) as ScUser[] | { users?: ScUser[] };
+    const users = Array.isArray(result) ? result : result.users ?? [];
+    return users.flatMap((user) => {
+      const author = loginOf(user);
+      return author ? [author] : [];
+    });
+  }
+
+  async setLabels(number: number, names: string[]): Promise<void> {
+    await this.service.mutate(
+      this.record,
+      'change-request-labels',
+      { names },
+      this.mutationContext({ number }),
+      '/pr/labels'
+    );
+  }
+
+  async setReviewers(number: number, names: string[]): Promise<void> {
+    await this.service.mutate(
+      this.record,
+      'change-request-reviewers',
+      { names },
+      this.mutationContext({ number }),
+      '/pr/reviewers'
+    );
+  }
+
+  async review(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void> {
+    await this.service.mutate(
+      this.record,
+      'change-request-review',
+      body ? { verdict, body } : { verdict },
+      this.mutationContext({ number }),
+      '/pr/review'
     );
   }
 }

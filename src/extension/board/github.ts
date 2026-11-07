@@ -1,7 +1,9 @@
 import type {
+  BoardAuthor,
   BoardItemDetail,
   BoardItemSummary,
   BoardKind,
+  BoardLabel,
   BoardListQuery,
   BoardListResult,
   BoardProviderInfo,
@@ -21,6 +23,11 @@ export interface BoardProvider {
   comment(kind: BoardKind, number: number, body: string): Promise<void>;
   setState(kind: BoardKind, number: number, state: 'open' | 'closed'): Promise<void>;
   merge(number: number, method: 'merge' | 'squash' | 'rebase'): Promise<void>;
+  listLabels?(): Promise<BoardLabel[]>;
+  listReviewerCandidates?(): Promise<BoardAuthor[]>;
+  setLabels?(number: number, names: string[]): Promise<void>;
+  setReviewers?(number: number, names: string[]): Promise<void>;
+  review?(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void>;
 }
 
 export interface GitHubRepo {
@@ -84,6 +91,7 @@ interface GitHubPull extends GitHubIssue {
   mergeable?: boolean | null;
   base?: { ref: string };
   head?: { ref: string; sha?: string };
+  requested_reviewers?: GitHubUser[];
   additions?: number;
   deletions?: number;
   merged?: boolean;
@@ -383,6 +391,11 @@ export class GitHubProvider implements BoardProvider {
       deletions: pull.deletions ?? null,
       mergeable: pull.mergeable ?? null,
       mergeMethods: ['merge', 'squash', 'rebase'],
+      reviewers: (pull.requested_reviewers ?? []).map((user) => authorOf(user)).filter((author): author is NonNullable<typeof author> => author !== null),
+      canEditLabels: true,
+      canEditReviewers: true,
+      canReview: true,
+      reviewModel: 'verdict',
       canComment: true,
       canClose: pull.state === 'open' && !pull.merged,
       canReopen: pull.state === 'closed' && !pull.merged,
@@ -496,6 +509,61 @@ export class GitHubProvider implements BoardProvider {
     await this.request(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}/merge`, {
       method: 'PUT',
       body: JSON.stringify({ merge_method: method })
+    });
+  }
+
+  async listLabels(): Promise<BoardLabel[]> {
+    const labels = await this.request<GitHubLabel[]>(`/repos/${this.github.owner}/${this.github.name}/labels?per_page=100`);
+    return labels.map((label) => ({ name: label.name, color: label.color ?? null }));
+  }
+
+  async listReviewerCandidates(): Promise<BoardAuthor[]> {
+    let users: GitHubUser[];
+    try {
+      users = await this.request<GitHubUser[]>(`/repos/${this.github.owner}/${this.github.name}/collaborators?per_page=100`);
+    } catch {
+      users = await this.request<GitHubUser[]>(`/repos/${this.github.owner}/${this.github.name}/assignees?per_page=100`);
+    }
+    return users.flatMap((user) => {
+      const author = authorOf(user);
+      return author ? [author] : [];
+    });
+  }
+
+  async setLabels(number: number, names: string[]): Promise<void> {
+    await this.request(`/repos/${this.github.owner}/${this.github.name}/issues/${number}/labels`, {
+      method: 'PUT',
+      body: JSON.stringify({ labels: names })
+    });
+  }
+
+  async setReviewers(number: number, names: string[]): Promise<void> {
+    const pull = await this.request<GitHubPull>(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}`);
+    const current = new Set((pull.requested_reviewers ?? []).map((user) => user.login));
+    const next = new Set(names);
+    const removed = [...current].filter((login) => !next.has(login));
+    const added = [...next].filter((login) => !current.has(login));
+    if (removed.length > 0) {
+      await this.request(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}/requested_reviewers`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reviewers: removed })
+      });
+    }
+    if (added.length > 0) {
+      await this.request(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}/requested_reviewers`, {
+        method: 'POST',
+        body: JSON.stringify({ reviewers: added })
+      });
+    }
+  }
+
+  async review(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void> {
+    await this.request(`/repos/${this.github.owner}/${this.github.name}/pulls/${number}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify({
+        event: verdict === 'approve' ? 'APPROVE' : 'REQUEST_CHANGES',
+        ...(body ? { body } : {})
+      })
     });
   }
 }

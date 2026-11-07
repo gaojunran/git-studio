@@ -49,6 +49,12 @@ export interface BoardItemDetail extends BoardItemSummary {
   deletions?: number | null;
   mergeable?: boolean | null;
   mergeMethods?: string[];
+  reviewers?: BoardAuthor[];
+  reviewState?: string | null;
+  canEditLabels?: boolean;
+  canEditReviewers?: boolean;
+  canReview?: boolean;
+  reviewModel?: 'verdict' | 'votes';
   canComment: boolean;
   canClose: boolean;
   canReopen: boolean;
@@ -111,6 +117,18 @@ export interface BoardDetailMessage {
   error?: string;
 }
 
+export interface BoardLabelsMessage {
+  type: 'labels';
+  requestId: number;
+  labels: BoardLabel[];
+}
+
+export interface BoardReviewersMessage {
+  type: 'reviewers';
+  requestId: number;
+  reviewers: BoardAuthor[];
+}
+
 export interface BoardBusyMessage {
   type: 'busy';
   busy: boolean;
@@ -127,6 +145,8 @@ export type BoardHostMessage =
   | BoardStateMessage
   | BoardListMessage
   | BoardDetailMessage
+  | BoardLabelsMessage
+  | BoardReviewersMessage
   | BoardBusyMessage
   | BoardErrorMessage;
 
@@ -142,4 +162,9 @@ export type BoardWebviewMessage =
   | { type: 'copy'; text: string }
   | { type: 'connectGithub' }
   | { type: 'connectProvider'; providerId: string }
+  | { type: 'listLabels'; requestId: number }
+  | { type: 'listReviewers'; requestId: number }
+  | { type: 'setLabels'; number: number; names: string[] }
+  | { type: 'setReviewers'; number: number; names: string[] }
+  | { type: 'review'; number: number; verdict: 'approve' | 'request-changes'; body?: string }
   | { type: 'openSettings' };

@@ -139,6 +139,33 @@ export class BoardPanel {
       case 'merge':
         await this.mutate('Merging', () => this.requireProvider().merge(message.number, message.method));
         return;
+      case 'listLabels':
+        await this.listLabels(message.requestId);
+        return;
+      case 'listReviewers':
+        await this.listReviewers(message.requestId);
+        return;
+      case 'setLabels':
+        await this.mutate('Saving labels', () => {
+          const provider = this.requireProvider();
+          if (!provider.setLabels) throw new Error('This provider cannot change labels.');
+          return provider.setLabels(message.number, message.names);
+        });
+        return;
+      case 'setReviewers':
+        await this.mutate('Saving reviewers', () => {
+          const provider = this.requireProvider();
+          if (!provider.setReviewers) throw new Error('This provider cannot change reviewers.');
+          return provider.setReviewers(message.number, message.names);
+        });
+        return;
+      case 'review':
+        await this.mutate(message.verdict === 'approve' ? 'Approving' : 'Requesting changes', () => {
+          const provider = this.requireProvider();
+          if (!provider.review) throw new Error('This provider cannot review change requests.');
+          return provider.review(message.number, message.verdict, message.body);
+        });
+        return;
       case 'openExternal':
         await vscode.env.openExternal(vscode.Uri.parse(message.url));
         return;
@@ -313,6 +340,26 @@ export class BoardPanel {
       this.post({ type: 'detail', requestId, detail });
     } catch (error) {
       this.post({ type: 'detail', requestId, detail: null, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async listLabels(requestId: number): Promise<void> {
+    try {
+      const provider = this.requireProvider();
+      const labels = provider.listLabels ? await provider.listLabels() : [];
+      this.post({ type: 'labels', requestId, labels });
+    } catch (error) {
+      this.post({ type: 'error', requestId, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  private async listReviewers(requestId: number): Promise<void> {
+    try {
+      const provider = this.requireProvider();
+      const reviewers = provider.listReviewerCandidates ? await provider.listReviewerCandidates() : [];
+      this.post({ type: 'reviewers', requestId, reviewers });
+    } catch (error) {
+      this.post({ type: 'error', requestId, message: error instanceof Error ? error.message : String(error) });
     }
   }
 
