@@ -17,6 +17,9 @@ place to learn and one source of truth for repository state.
 - Open a commit as a native multi-file diff; compare any two commits.
 - File history with rename following (`git log --follow`), opened from Explorer, SCM or the editor.
 - Full-file blame annotations with configurable template and clickable commit links.
+- Compare the working tree with any branch, tag or commit (command palette, SCM title, Explorer
+  and editor context). The working-tree side of the diff is a real file URI, so it stays editable;
+  untracked files are included as additions.
 - Commit actions from the detail pane or a row right-click:
   create branch here, create tag here, checkout (detached), compare with working tree,
   open on GitHub/GitLab/Bitbucket, copy subject or hash.
@@ -40,6 +43,7 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Open Commit in History` | Reveal a commit in the history panel. |
 | `Git Studio: Go to Commit…` | Jump to a hash, branch or tag. |
 | `Git Studio: Undo Last Rewrite` | Reset back to the state recorded before the last rewrite. |
+| `Git Studio: Compare Working Tree with…` | Pick a branch, tag or commit and open an editable multi-file diff. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
 
 ## Settings

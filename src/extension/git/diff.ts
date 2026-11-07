@@ -144,11 +144,20 @@ export async function loadWorktreeFiles(
   ref: string,
   signal?: AbortSignal
 ): Promise<FileChange[]> {
-  const [names, stats] = await Promise.all([
+  const [names, stats, untracked] = await Promise.all([
     runner.run(['diff', '--name-status', '-z', '-M', '--no-color', ref], cwd, { signal }),
-    runner.run(['diff', '--numstat', '-z', '-M', '--no-color', ref], cwd, { signal })
+    runner.run(['diff', '--numstat', '-z', '-M', '--no-color', ref], cwd, { signal }),
+    runner.run(['ls-files', '--others', '--exclude-standard', '-z'], cwd, { signal })
   ]);
-  return mergeChanges(parseNameStatus(names), parseNumStat(stats));
+
+  const changes = mergeChanges(parseNameStatus(names), parseNumStat(stats));
+  const known = new Set(changes.map((change) => change.path));
+  for (const filePath of untracked.split('\x00')) {
+    if (filePath && !known.has(filePath)) {
+      changes.push({ path: filePath, status: 'A', additions: 0, deletions: 0, binary: false });
+    }
+  }
+  return changes.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 export async function loadDiffFiles(

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GitRunner } from './git/cli';
 import { WriteCoordinator } from './git/write';
 import { AnnotateController } from './features/annotate';
+import { compareWorkingTree } from './features/compare';
 import { HistoryPanel } from './host/historyPanel';
 import { Journal } from './host/journal';
 import { RepoService } from './host/repoService';
@@ -125,6 +126,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch {
         void vscode.window.showErrorMessage(`Git Studio: unknown revision "${revision}".`);
       }
+    }),
+
+    vscode.commands.registerCommand('gitStudio.compareWorkingTree', async (arg?: unknown) => {
+      const objectArg = arg && typeof arg === 'object' && !(arg instanceof vscode.Uri)
+        ? arg as { uri?: vscode.Uri; ref?: string }
+        : undefined;
+      const uri = arg instanceof vscode.Uri ? arg : objectArg?.uri ?? uriFromArg(arg);
+      const ref = typeof arg === 'string' ? arg : objectArg?.ref;
+      await compareWorkingTree(services, uri, ref);
     }),
 
     vscode.commands.registerCommand('gitStudio.undoLastRewrite', async () => {

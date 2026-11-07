@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -64,6 +64,11 @@
         "category": "Git Studio"
       },
       {
+        "command": "gitStudio.compareWorkingTree",
+        "title": "Compare Working Tree with…",
+        "category": "Git Studio"
+      },
+      {
         "command": "gitStudio.refresh",
         "title": "Refresh",
         "category": "Git Studio",
@@ -76,6 +81,11 @@
           "command": "gitStudio.openHistory",
           "when": "scmProvider == git",
           "group": "navigation@10"
+        },
+        {
+          "command": "gitStudio.compareWorkingTree",
+          "when": "scmProvider == git",
+          "group": "navigation@11"
         }
       ],
       "scm/resourceState/context": [
@@ -95,6 +105,11 @@
           "command": "gitStudio.fileHistory",
           "when": "!explorerResourceIsFolder && resourceScheme == file",
           "group": "9_git@1"
+        },
+        {
+          "command": "gitStudio.compareWorkingTree",
+          "when": "!explorerResourceIsFolder && resourceScheme == file",
+          "group": "9_git@2"
         }
       ],
       "editor/context": [
@@ -107,6 +122,11 @@
           "command": "gitStudio.annotateFile",
           "when": "resourceScheme == file",
           "group": "9_git@2"
+        },
+        {
+          "command": "gitStudio.compareWorkingTree",
+          "when": "resourceScheme == file",
+          "group": "9_git@3"
         }
       ]
     },
