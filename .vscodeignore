@@ -4,10 +4,14 @@ node_modules/**
 .vscode/**
 .git/**
 .gitignore
+docs/**
+TODO.md
 **/*.map
 **/*.test.ts
 tsconfig*.json
 vite.config.mts
+vite.board.config.mts
 vitest.config.mts
+.cortexkit/**
 esbuild.mjs
 package-lock.json

@@ -36,6 +36,9 @@ place to learn and one source of truth for repository state.
   and is only offered while HEAD still matches the recorded result.
 - Write safety: operations are serialized, the target commit is re-resolved, and HEAD is
   rechecked after confirmation; a merge/rebase/cherry-pick/revert in progress blocks new writes.
+- Issues / pull requests / discussions board in its own editor panel: repository tabs, search,
+  state filter, split list and preview, comments, close/reopen and merge for GitHub. The same
+  board can be served by an unmodified OpenChamber source-control integration package.
 
 ## Commands
 
@@ -57,6 +60,11 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Compare Folder with Working Tree…` | Diff a folder against a ref from their merge base; the working-tree side stays editable. |
 | `Git Studio: Compare Unpushed Commits…` | Diff `@{upstream}..HEAD` before pushing. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
+| `Git Studio: Open Issues & Pull Requests` | Open the board for the active repository. |
+| `Git Studio: Connect GitHub for Board` | Store a GitHub token for the board. |
+| `Git Studio: Install Integration Extension…` | Install a folder containing an OpenChamber source-control integration package. |
+| `Git Studio: Connect Integration Account…` | Connect a token to an installed integration. |
+| `Git Studio: Remove Integration Extension…` | Forget an installed integration and its token. |
 
 ### Ref picker
 
@@ -92,6 +100,24 @@ it means "only uncommitted changes".
 The picker opens immediately and fills in after refs load. Lists are capped (20 mainlines, 40 local,
 40 remote, 20 tags); `Show all refs…` loads the rest on demand. Branches contained in the current
 branch are listed first inside each group, then the most recently updated ones.
+
+## Issues and pull requests board
+
+The board opens as an editor panel and reads the active repository's remote. GitHub is built in;
+other hosts come from OpenChamber source-control integration packages.
+
+- Tabs: issues, pull requests and, on GitHub, discussions.
+- Search and open/closed/all filter, paged list, split preview.
+- GitHub writes: comment, close/reopen, merge/squash, open on GitHub, copy link.
+- An installed integration package runs unmodified: Git Studio parses its `openchamber` manifest,
+  starts its `service/main.js`, proxies the source-control wire and keeps the token in VS Code
+  SecretStorage. The package never sees the token; its forge calls go through Git Studio's outbound
+  callback with a per-call handle.
+
+Integration packages are installed from a folder with **Git Studio: Install Integration Extension…**.
+The first version supports the `source-control` role's reads (issues, change requests, comments and
+context); writes through an integration are not wired yet. Tracker packages, chat-session actions
+and worktree creation are out of scope for this version.
 
 ## Settings
 

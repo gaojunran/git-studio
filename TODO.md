@@ -28,10 +28,14 @@
 
 完整方案见 [`docs/openchamber-board-plan.md`](docs/openchamber-board-plan.md)。
 
-- [ ] Guest Host：零修改运行 OpenChamber source-control / tracker 插件
-- [ ] Board UI：vendor `sourceBoard` / `references` / UI primitives + compat 层
-- [ ] 读写动作、mutation 幂等、discussion、tracker tab
-- [ ] 内置 provider（建议先 GitHub）后置
+- [x] 第一版 Board：GitHub 内置 provider（issue / PR / discussion 读，comment / close / merge 写）
+- [x] 第一版 Guest Host：folder 安装、manifest 解析、service spawn、loopback 代理、outbound callback、SecretStorage token
+- [x] 零修改验证：Teahouse 示例插件在真实 VS Code 中启动并列出 issue/PR
+- [ ] Guest Host 写操作：comment / close / merge / review
+- [ ] Board UI 与 OpenChamber 逐像素对齐
+- [ ] Tracker / Linear tab
+- [ ] git URL / zip 安装与更新
+- [ ] 内置 provider 扩展：GitLab / Gitea / Forgejo / Gerrit
 
 ### 1. Stash 工作台
 

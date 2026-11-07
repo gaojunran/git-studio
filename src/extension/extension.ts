@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import { GitRunner } from './git/cli';
 import { WriteCoordinator } from './git/write';
 import { AnnotateController } from './features/annotate';
+import { BoardPanel } from './board/panel';
+import { connectIntegration, installIntegration, removeIntegration } from './board/commands';
+import { createBoardContext } from './board/service';
 import { compareWorkingTree } from './features/compare';
 import {
   compareFileRevisions,
@@ -30,6 +33,9 @@ interface CompareArg {
   stash?: string;
   current?: string;
 }
+
+let activeBoard: ReturnType<typeof createBoardContext> | undefined;
+
 
 function splitCompareArg(arg: unknown): { uri?: vscode.Uri; options: CompareArg } {
   if (arg instanceof vscode.Uri) {
@@ -74,6 +80,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     extensionUri: context.extensionUri
   };
   const annotate = new AnnotateController(services);
+  const board = createBoardContext(context, output);
+  activeBoard = board;
 
   const updateContext = () => {
     void vscode.commands.executeCommand('setContext', 'gitStudio.hasRepo', repoService.list().length > 0);
@@ -87,6 +95,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     repoService.onDidChangeRepositories(updateContext),
     vscode.workspace.registerTextDocumentContentProvider('gitstudio-empty', {
       provideTextDocumentContent: () => ''
+    }),
+
+    vscode.commands.registerCommand('gitStudio.openBoard', async (arg?: unknown) => {
+      const uri = uriFromArg(arg) ?? vscode.window.activeTextEditor?.document.uri;
+      await BoardPanel.show(services, context.secrets, board, { repo: uri ? repoService.forUri(uri) : undefined });
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardInstallIntegration', async (arg?: { folder?: string; instance?: string; token?: string; login?: string }) => {
+      await installIntegration(board, arg ?? {});
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardConnectIntegration', async () => {
+      await connectIntegration(board);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardRemoveIntegration', async () => {
+      await removeIntegration(board);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardConnectGithub', async () => {
+      await BoardPanel.connectGithub(context.secrets);
     }),
 
     vscode.commands.registerCommand('gitStudio.openHistory', async (arg?: unknown) => {
@@ -222,6 +251,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 }
 
-export function deactivate(): void {
-  // No workspace-level resources to release.
+export async function deactivate(): Promise<void> {
+  await activeBoard?.guestService.dispose();
 }

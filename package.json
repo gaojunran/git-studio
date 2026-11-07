@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.9.8",
+  "version": "0.10.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -31,6 +31,32 @@
         "title": "Open History",
         "category": "Git Studio",
         "icon": "$(history)"
+      },
+      {
+        "command": "gitStudio.openBoard",
+        "title": "Open Issues & Pull Requests",
+        "category": "Git Studio",
+        "icon": "$(issues)"
+      },
+      {
+        "command": "gitStudio.boardConnectGithub",
+        "title": "Connect GitHub for Board",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.boardInstallIntegration",
+        "title": "Install Integration Extension…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.boardConnectIntegration",
+        "title": "Connect Integration Account…",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.boardRemoveIntegration",
+        "title": "Remove Integration Extension…",
+        "category": "Git Studio"
       },
       {
         "command": "gitStudio.fileHistory",
@@ -123,6 +149,11 @@
           "command": "gitStudio.openHistory",
           "when": "scmProvider == git",
           "group": "navigation@10"
+        },
+        {
+          "command": "gitStudio.openBoard",
+          "when": "scmProvider == git",
+          "group": "navigation@9"
         },
         {
           "command": "gitStudio.compareWorkingTree",
@@ -287,16 +318,18 @@
     }
   },
   "scripts": {
-    "build": "npm run build:ext && npm run build:web",
+    "build": "npm run build:ext && npm run build:web && npm run build:board",
     "build:ext": "node esbuild.mjs",
     "build:web": "vite build",
-    "watch": "concurrently -n ext,web -c blue,green \"node esbuild.mjs --watch\" \"vite build --watch\"",
+    "build:board": "vite build --config vite.board.config.mts",
+    "watch": "concurrently -n ext,web,board -c blue,green,yellow \"node esbuild.mjs --watch\" \"vite build --watch\" \"vite build --watch --config vite.board.config.mts\"",
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "test": "vitest run",
     "install:local": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out dist/git-studio-$npm_package_version.vsix && code --install-extension dist/git-studio-$npm_package_version.vsix --force",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
+    "@openchamber/sdk": "^2.6.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
