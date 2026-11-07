@@ -3,7 +3,7 @@ import { GitRunner } from './git/cli';
 import { WriteCoordinator } from './git/write';
 import { AnnotateController } from './features/annotate';
 import { BoardPanel } from './board/panel';
-import { connectIntegration, installIntegration, removeIntegration } from './board/commands';
+import { connectIntegration, installIntegration, installIntegrationFromGit, removeIntegration, updateIntegration } from './board/commands';
 import { createBoardContext } from './board/service';
 import { compareWorkingTree } from './features/compare';
 import {
@@ -104,6 +104,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('gitStudio.boardInstallIntegration', async (arg?: { folder?: string; instance?: string; token?: string; login?: string }) => {
       await installIntegration(board, arg ?? {});
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardInstallIntegrationFromGit', async (arg?: { url?: string; instance?: string; token?: string; login?: string }) => {
+      await installIntegrationFromGit(board, arg ?? {});
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardUpdateIntegration', async () => {
+      await updateIntegration(board);
     }),
 
     vscode.commands.registerCommand('gitStudio.boardConnectIntegration', async () => {

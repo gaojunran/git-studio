@@ -1,8 +1,15 @@
 import * as vscode from 'vscode';
+import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdir, rm } from 'node:fs/promises';
+import * as path from 'node:path';
+import { promisify } from 'node:util';
 import { readGuestManifest } from './guest/manifest';
 import type { GuestRecord } from './guest/store';
 import type { BoardContext } from './service';
 import { BoardPanel } from './panel';
+
+const execFileAsync = promisify(execFile);
 
 function instanceAllowed(raw: string, descriptor: GuestRecord['descriptor']): string {
   let url: URL;
@@ -67,7 +74,8 @@ export async function installIntegration(board: BoardContext, options: { folder?
       entry: manifest.entry,
       version: manifest.version,
       instance: instanceAllowed(instance, manifest.descriptor),
-      descriptor: manifest.descriptor
+      descriptor: manifest.descriptor,
+      source: { kind: 'folder' }
     };
     await board.guests.add(record);
     if (options.token) {
@@ -83,6 +91,103 @@ export async function installIntegration(board: BoardContext, options: { folder?
         await connectIntegration(board);
       }
     }
+    await BoardPanel.refreshCurrent();
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Git Studio: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function installIntegrationFromGit(
+  board: BoardContext,
+  options: { url?: string; instance?: string; token?: string; login?: string } = {}
+): Promise<void> {
+  const url = options.url ?? await vscode.window.showInputBox({
+    title: 'Install integration from Git',
+    prompt: 'HTTPS or SSH URL of a repository containing an OpenChamber integration package.',
+    placeHolder: 'https://github.com/owner/openchamber-integration',
+    ignoreFocusOut: true
+  });
+  if (!url) {
+    return;
+  }
+
+  const hash = createHash('sha1').update(url).digest('hex').slice(0, 12);
+  const target = path.join(board.storage.fsPath, 'guests', hash);
+  try {
+    await rm(target, { recursive: true, force: true });
+    await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
+    await execFileAsync('git', ['clone', '--depth', '1', '--single-branch', url, target], {
+      timeout: 120_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    });
+    const manifest = await readGuestManifest(target);
+    const instance = options.instance ?? await pickInstance(manifest.descriptor);
+    if (!instance) {
+      return;
+    }
+    const record: GuestRecord = {
+      id: manifest.id,
+      name: manifest.name,
+      packageRoot: manifest.packageRoot,
+      entry: manifest.entry,
+      version: manifest.version,
+      instance: instanceAllowed(instance, manifest.descriptor),
+      descriptor: manifest.descriptor,
+      source: { kind: 'git', url }
+    };
+    await board.guests.add(record);
+    if (options.token) {
+      await board.guestService.connect(record, options.token, options.login);
+      void vscode.window.showInformationMessage(`Git Studio: installed and connected ${manifest.name}.`);
+    } else {
+      const connect = await vscode.window.showInformationMessage(
+        `Git Studio: installed ${manifest.name}. Connect an account now?`,
+        'Connect',
+        'Later'
+      );
+      if (connect === 'Connect') {
+        await connectIntegration(board);
+      }
+    }
+    await BoardPanel.refreshCurrent();
+  } catch (error) {
+    await rm(target, { recursive: true, force: true });
+    void vscode.window.showErrorMessage(`Git Studio: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function updateIntegration(board: BoardContext): Promise<void> {
+  const guests = board.guests.list().filter((guest) => guest.source?.kind === 'git');
+  if (guests.length === 0) {
+    void vscode.window.showInformationMessage('Git Studio: no Git-installed integration to update.');
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(
+    guests.map((guest) => ({ label: guest.name, description: guest.source?.url ?? guest.instance, guest })),
+    { placeHolder: 'Update an integration' }
+  );
+  if (!picked) {
+    return;
+  }
+  try {
+    await execFileAsync('git', ['-C', picked.guest.packageRoot, 'pull', '--ff-only'], {
+      timeout: 120_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    });
+    const manifest = await readGuestManifest(picked.guest.packageRoot);
+    if (manifest.id !== picked.guest.id) {
+      throw new Error(`The package id changed from ${picked.guest.id} to ${manifest.id}; remove and reinstall it.`);
+    }
+    const record: GuestRecord = {
+      ...picked.guest,
+      name: manifest.name,
+      entry: manifest.entry,
+      version: manifest.version,
+      descriptor: manifest.descriptor
+    };
+    await board.guests.add(record);
+    await board.guestService.stop(record.id);
+    void vscode.window.showInformationMessage(`Git Studio: updated ${manifest.name} to ${manifest.version}.`);
     await BoardPanel.refreshCurrent();
   } catch (error) {
     void vscode.window.showErrorMessage(`Git Studio: ${error instanceof Error ? error.message : String(error)}`);

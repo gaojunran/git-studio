@@ -36,7 +36,8 @@
 - [ ] Guest Host 写操作：review threads
 - [ ] Board UI 与 OpenChamber 逐像素对齐
 - [ ] Tracker / Linear tab
-- [ ] git URL / zip 安装与更新
+- [x] Git URL 安装与更新（folder 安装保留）
+- [ ] zip / VSIX 安装
 - [ ] 内置 provider 扩展：GitLab / Gitea / Forgejo / Gerrit
 
 ### 1. Stash 工作台
