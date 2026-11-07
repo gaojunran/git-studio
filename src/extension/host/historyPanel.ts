@@ -72,13 +72,18 @@ export class HistoryPanel {
   private graph: GraphRow[] = [];
   private hasMore = true;
   private refSignature = '';
+  private lastRefsAt = 0;
   private token = 0;
   private abort: AbortController | undefined;
   private ready = false;
   private pendingFocus: string | undefined;
   private details = new Map<string, CommitDetail>();
+  private readonly parentIndex = new Map<string, number>();
 
   static async show(services: Services, options: ShowOptions = {}): Promise<HistoryPanel | undefined> {
+    if (HistoryPanel.current && !options.repo) {
+      options = { ...options, repo: HistoryPanel.current.repo };
+    }
     const handle = options.repo ?? await services.repoService.pick(options.fileUri ?? vscode.window.activeTextEditor?.document.uri);
     if (!handle) {
       void vscode.window.showWarningMessage('Git Studio: no Git repository found in this workspace.');
@@ -119,7 +124,10 @@ export class HistoryPanel {
     }
     this.pendingFocus = options.focus;
 
-    panel.webview.html = renderHtml(panel.webview, services.extensionUri);
+    this.panel.webview.html = renderHtml(panel.webview, services.extensionUri);
+    if (this.filePath) {
+      panel.title = `History: ${path.basename(this.filePath)}`;
+    }
     this.disposables.push(
       panel.webview.onDidReceiveMessage((message: WebviewMessage) => void this.onMessage(message)),
       panel.onDidChangeViewState(() => {
@@ -143,6 +151,7 @@ export class HistoryPanel {
       this.hasMore = true;
       this.refSignature = '';
       this.details.clear();
+    this.parentIndex.clear();
     }
 
     if (options.fileUri) {
@@ -154,11 +163,16 @@ export class HistoryPanel {
           path: relative
         };
         this.refSignature = '';
+        this.panel.title = `History: ${path.basename(relative)}`;
       }
     }
 
     if (options.focus) {
-      this.focus(options.focus);
+      if (this.ready) {
+        this.focus(options.focus);
+      } else {
+        this.pendingFocus = options.focus;
+      }
     }
 
     this.panel.reveal(vscode.ViewColumn.Active);
@@ -184,7 +198,7 @@ export class HistoryPanel {
           await this.query(message);
           break;
         case 'selectCommit':
-          await this.select(message.hash);
+          await this.select(message.hash, message.parentIndex ?? 0);
           break;
         case 'openFileDiff':
           await this.openFileDiff(message.hash, message.path, message.oldPath, message.status);
@@ -226,6 +240,7 @@ export class HistoryPanel {
   private async sendInit(): Promise<void> {
     try {
       this.refs = await loadRefs(this.services.runner, this.repo.root);
+      this.lastRefsAt = Date.now();
     } catch (error) {
       this.services.output.warn(`failed to load refs: ${errorText(error)}`);
     }
@@ -253,6 +268,9 @@ export class HistoryPanel {
       this.graph = [];
       this.hasMore = true;
       this.filters = { ...message.filters };
+      if (this.filePath && this.filters.path !== this.filePath) {
+        this.filePath = undefined;
+      }
     }
 
     const token = this.token;
@@ -262,7 +280,7 @@ export class HistoryPanel {
 
     this.post({ type: 'busy', busy: true });
     try {
-      const stale = message.append ? false : await this.checkStale(signal);
+      const stale = await this.checkStale(signal);
       const query: LogQuery = {
         refs: this.filters.refs,
         path: this.filters.path || undefined,
@@ -315,9 +333,13 @@ export class HistoryPanel {
   }
 
   private async checkStale(signal?: AbortSignal): Promise<boolean> {
+    if (Date.now() - this.lastRefsAt < 5000) {
+      return false;
+    }
     try {
       const refs = await loadRefs(this.services.runner, this.repo.root, signal);
       this.refs = refs;
+      this.lastRefsAt = Date.now();
       const signature = refs
         .map((ref) => `${ref.name}:${ref.oid}`)
         .sort()
@@ -332,8 +354,10 @@ export class HistoryPanel {
     }
   }
 
-  private async select(hash: string): Promise<void> {
-    const cached = this.details.get(hash);
+  private async select(hash: string, parentIndex = 0): Promise<void> {
+    this.parentIndex.set(hash, parentIndex);
+    const key = `${hash}:${parentIndex}`;
+    const cached = this.details.get(key);
     if (cached) {
       this.post({ type: 'detail', hash, detail: cached });
       return;
@@ -341,8 +365,8 @@ export class HistoryPanel {
 
     this.post({ type: 'detail', hash, detail: null });
     try {
-      const detail = await loadCommitDetail(this.services.runner, this.repo.root, hash);
-      this.details.set(hash, detail);
+      const detail = await loadCommitDetail(this.services.runner, this.repo.root, hash, parentIndex);
+      this.details.set(key, detail);
       if (this.details.size > 50) {
         const oldest = this.details.keys().next().value;
         if (oldest) {
@@ -356,13 +380,15 @@ export class HistoryPanel {
   }
 
   private async detailFor(hash: string): Promise<CommitDetail | undefined> {
-    const cached = this.details.get(hash);
+    const parentIndex = this.parentIndex.get(hash) ?? 0;
+    const key = `${hash}:${parentIndex}`;
+    const cached = this.details.get(key);
     if (cached) {
       return cached;
     }
     try {
-      const detail = await loadCommitDetail(this.services.runner, this.repo.root, hash);
-      this.details.set(hash, detail);
+      const detail = await loadCommitDetail(this.services.runner, this.repo.root, hash, parentIndex);
+      this.details.set(key, detail);
       return detail;
     } catch (error) {
       this.services.output.error(`load commit ${hash} failed: ${errorText(error)}`);
@@ -378,8 +404,7 @@ export class HistoryPanel {
     return this.repo.repo.toGitUri(vscode.Uri.joinPath(this.repo.repo.rootUri, filePath), ref);
   }
 
-  private fileUris(file: FileChange, hash: string, parents: string[]): [vscode.Uri, vscode.Uri, vscode.Uri] {
-    const parent = parents[0];
+  private fileUris(file: FileChange, hash: string, parent: string | undefined): [vscode.Uri, vscode.Uri, vscode.Uri] {
     const oldPath = file.oldPath ?? file.path;
     const left = file.status === 'A' || !parent
       ? this.emptyUri(oldPath)
@@ -403,7 +428,7 @@ export class HistoryPanel {
       deletions: 0,
       binary: false
     };
-    const [, left, right] = this.fileUris(file, hash, detail.parents);
+    const [, left, right] = this.fileUris(file, hash, detail.parents[detail.parentIndex]);
     await vscode.commands.executeCommand(
       'vscode.diff',
       left,
@@ -419,7 +444,7 @@ export class HistoryPanel {
       return;
     }
 
-    const entries = detail.files.map((file) => this.fileUris(file, hash, detail.parents));
+    const entries = detail.files.map((file) => this.fileUris(file, hash, detail.parents[detail.parentIndex]));
     try {
       await vscode.commands.executeCommand('vscode.changes', `${shortHash(hash)} · ${detail.message.split('\n')[0]}`, entries);
     } catch (error) {
@@ -511,6 +536,7 @@ export class HistoryPanel {
     this.hasMore = true;
     this.refSignature = '';
     this.details.clear();
+    this.parentIndex.clear();
     this.panel.title = 'Git History';
     await this.sendInit();
     this.post({ type: 'filters', filters: this.filters });
@@ -527,7 +553,9 @@ export class HistoryPanel {
     this.graph = [];
     this.hasMore = true;
     this.refSignature = '';
+    this.lastRefsAt = 0;
     this.details.clear();
+    this.parentIndex.clear();
     await this.sendInit();
     this.post({ type: 'filters', filters: this.filters });
   }
@@ -546,6 +574,7 @@ export class HistoryPanel {
       disposable.dispose();
     }
     this.details.clear();
+    this.parentIndex.clear();
     if (HistoryPanel.current === this) {
       HistoryPanel.current = undefined;
     }

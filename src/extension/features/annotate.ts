@@ -105,18 +105,25 @@ export class AnnotateController implements vscode.Disposable {
   async refresh(editor: vscode.TextEditor, force = false): Promise<void> {
     const document = editor.document;
     if (!this.isEnabled(document) || document.uri.scheme !== 'file') {
+      this.hide(document.uri);
       return;
     }
 
     const repo = this.services.repoService.forUri(document.uri);
     if (!repo) {
+      this.hide(document.uri);
       return;
     }
     const relative = this.services.repoService.relativePath(repo, document.uri);
     if (!relative) {
+      this.hide(document.uri);
+      return;
+    }
+    if (document.isDirty) {
       return;
     }
     if (document.lineCount > MAX_LINES) {
+      this.hide(document.uri);
       this.services.output.warn(`annotate skipped: ${relative} has ${document.lineCount} lines`);
       return;
     }
@@ -223,7 +230,7 @@ export class AnnotateController implements vscode.Disposable {
         if (editor) {
           void this.refresh(editor, true);
         }
-      }, 1200)
+      }, 2000)
     );
   }
 

@@ -8,6 +8,7 @@ export async function loadCommitDetail(
   runner: GitRunner,
   cwd: string,
   hash: string,
+  parentIndex = 0,
   signal?: AbortSignal
 ): Promise<CommitDetail> {
   const raw = await runner.run(
@@ -21,12 +22,16 @@ export async function loadCommitDetail(
     committerName = '', committerEmail = '', commitDate = '0'] = fields;
   const message = fields.slice(8).join('\x1f');
 
-  const files = await loadCommitFiles(runner, cwd, hash, parents.split(' ').filter(Boolean), signal);
+  const parentsList = parents.split(' ').filter(Boolean);
+  const index = Math.max(0, Math.min(parentIndex, Math.max(0, parentsList.length - 1)));
+  const parent = parentsList[index];
+  const files = await loadCommitFiles(runner, cwd, hash, parent ? [parent] : [], signal);
 
   return {
     hash: fullHash || hash,
     message,
-    parents: parents.split(' ').filter(Boolean),
+    parents: parentsList,
+    parentIndex: index,
     authorName,
     authorEmail,
     authorDate: Number(authorDate) || 0,

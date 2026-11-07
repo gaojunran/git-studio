@@ -40,6 +40,10 @@ export class GitRunner {
   }
 
   async run(args: string[], cwd: string, options: GitRunOptions = {}): Promise<string> {
+    if (options.signal) {
+      return this.enqueue(() => this.execute(args, cwd, options));
+    }
+
     const key = JSON.stringify([cwd, args]);
     const existing = this.pending.get(key);
     if (existing) {

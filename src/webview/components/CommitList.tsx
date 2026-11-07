@@ -63,6 +63,14 @@ export function CommitList(props: Props) {
 
   useEffect(() => {
     const element = containerRef.current;
+    if (element && element.scrollTop > rows.length * ROW_HEIGHT) {
+      element.scrollTop = 0;
+      setScrollTop(0);
+    }
+  }, [rows.length]);
+
+  useEffect(() => {
+    const element = containerRef.current;
     if (!element || !selected || scrolledForRef.current === selected) {
       return;
     }
@@ -134,6 +142,8 @@ export function CommitList(props: Props) {
       <div
         key={row.hash}
         className={`row ${isSelected ? 'row--selected' : ''} ${isCompare ? 'row--compare' : ''}`}
+        role="option"
+        aria-selected={isSelected}
         style={{ top: index * ROW_HEIGHT, height: ROW_HEIGHT, paddingLeft: graphWidth }}
         onClick={(event) => {
           if (event.metaKey || event.ctrlKey) {
@@ -145,18 +155,20 @@ export function CommitList(props: Props) {
         onDoubleClick={() => props.onOpenCommit(row.hash)}
         title={`${row.shortHash} · ${row.authorName} · ${row.subject}`}
       >
-        <span className="row__subject">{row.subject}</span>
-        {shown.length > 0 && (
-          <span className="row__refs">
-            {shown.map((badge) => (
-              <span key={`${row.hash}-${badge.kind}-${badge.label}`} className={`ref ref--${badge.kind}`}>
-                {badge.kind === 'head' ? '⌂ ' : ''}
-                {badge.label}
-              </span>
-            ))}
-            {hidden > 0 && <span className="ref ref--more">+{hidden}</span>}
-          </span>
-        )}
+        <span className="row__main">
+          <span className="row__subject">{row.subject || <span className="muted">(no message)</span>}</span>
+          {shown.length > 0 && (
+            <span className="row__refs">
+              {shown.map((badge) => (
+                <span key={`${row.hash}-${badge.kind}-${badge.label}`} className={`ref ref--${badge.kind}`}>
+                  {badge.kind === 'head' ? '⌂ ' : ''}
+                  {badge.label}
+                </span>
+              ))}
+              {hidden > 0 && <span className="ref ref--more">+{hidden}</span>}
+            </span>
+          )}
+        </span>
         <span className="row__author">{row.authorName}</span>
         <span className="row__date">{relativeDate(row.authorDate)}</span>
         <span className="row__hash">{row.shortHash}</span>
@@ -166,7 +178,7 @@ export function CommitList(props: Props) {
   }
 
   return (
-    <div className="list" ref={containerRef} onScroll={handleScroll} tabIndex={0} onKeyDown={handleKeyDown}>
+    <div className="list" ref={containerRef} onScroll={handleScroll} tabIndex={0} onKeyDown={handleKeyDown} role="listbox" aria-label="Commits">
       <div className="list__spacer" style={{ height: rows.length * ROW_HEIGHT }}>
         {rows.length > 0 && (
           <GraphOverlay

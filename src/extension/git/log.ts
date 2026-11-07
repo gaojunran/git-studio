@@ -20,9 +20,11 @@ export interface LogQuery {
 
 const FIELD = '\x1f';
 const RECORD = '\x00';
+const FIELD_ESCAPE = '%x1f';
+const RECORD_ESCAPE = '%x00';
 
 export function logFormat(): string {
-  return `%H${FIELD}%h${FIELD}%P${FIELD}%an${FIELD}%ae${FIELD}%at${FIELD}%ct${FIELD}%D${FIELD}%s${RECORD}`;
+  return `%H${FIELD_ESCAPE}%h${FIELD_ESCAPE}%P${FIELD_ESCAPE}%an${FIELD_ESCAPE}%ae${FIELD_ESCAPE}%at${FIELD_ESCAPE}%ct${FIELD_ESCAPE}%D${FIELD_ESCAPE}%s${RECORD_ESCAPE}`;
 }
 
 export function parseLog(stdout: string): CommitRow[] {

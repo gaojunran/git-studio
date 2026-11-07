@@ -72,6 +72,7 @@ export interface CommitDetail {
   hash: string;
   message: string;
   parents: string[];
+  parentIndex: number;
   authorName: string;
   authorEmail: string;
   authorDate: number;
@@ -118,7 +119,7 @@ export type HostMessage =
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'query'; requestId: number; append: boolean; filters: Filters; skip: number; limit: number }
-  | { type: 'selectCommit'; hash: string }
+  | { type: 'selectCommit'; hash: string; parentIndex?: number }
   | { type: 'openFileDiff'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'compare'; a: string; b: string }

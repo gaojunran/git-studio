@@ -42,6 +42,7 @@ export interface RepoHandle {
 
 export class RepoService {
   private api: GitApiLike | undefined;
+  private repoListener: vscode.Disposable | undefined;
   private repoChangeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeRepositories = this.repoChangeEmitter.event;
 
@@ -57,7 +58,7 @@ export class RepoService {
         return;
       }
       this.api = exports.getAPI(1);
-      this.api.onDidOpenRepository(() => this.repoChangeEmitter.fire());
+      this.repoListener = this.api.onDidOpenRepository(() => this.repoChangeEmitter.fire());
     } catch {
       this.api = undefined;
     }
@@ -91,7 +92,11 @@ export class RepoService {
 
   forUri(uri: vscode.Uri): RepoHandle | undefined {
     const repo = this.api?.getRepository(uri);
-    return repo ? this.list().find((candidate) => candidate.repo === repo) : undefined;
+    if (!repo) {
+      return undefined;
+    }
+    const root = repo.rootUri.toString();
+    return this.list().find((candidate) => candidate.repo.rootUri.toString() === root);
   }
 
   async pick(uri?: vscode.Uri): Promise<RepoHandle | undefined> {
@@ -140,6 +145,7 @@ export class RepoService {
   }
 
   dispose(): void {
+    this.repoListener?.dispose();
     this.repoChangeEmitter.dispose();
   }
 }

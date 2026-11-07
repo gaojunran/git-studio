@@ -62,7 +62,7 @@ export function GraphOverlay(props: Props) {
           d={path}
           stroke={graphColor(segment.color)}
           fill="none"
-          strokeWidth={1.25}
+          strokeWidth={1.5}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -75,7 +75,7 @@ export function GraphOverlay(props: Props) {
         key={`n-${index}`}
         cx={x}
         cy={centerY}
-        r={selected ? 4 : 3}
+        r={selected ? 4.5 : 3.5}
         fill={graphColor(row.color)}
         stroke={selected ? 'var(--vscode-editor-background)' : 'none'}
         strokeWidth={selected ? 1.5 : 0}

@@ -18,6 +18,23 @@ body {
   overflow: hidden;
 }
 
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 button,
 input,
 select {
@@ -336,8 +353,16 @@ select.input {
   border-left-color: var(--vscode-focusBorder);
 }
 
-.row__subject {
+.row__main {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.row__subject {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -348,7 +373,7 @@ select.input {
   display: flex;
   gap: 3px;
   flex: none;
-  max-width: 320px;
+  max-width: 300px;
   overflow: hidden;
 }
 
@@ -648,4 +673,14 @@ select.input {
   .row__author {
     width: 90px;
   }
+}
+.parents-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 6px;
+  font-size: 11px;
+}
+.detail {
+  background: var(--vscode-editor-background);
 }

@@ -1,7 +1,9 @@
 src/**
 node_modules/**
+.tmp/**
 .vscode/**
 .git/**
+.gitignore
 **/*.map
 **/*.test.ts
 tsconfig*.json

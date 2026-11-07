@@ -41,6 +41,8 @@ export function App() {
   const hasMoreRef = useRef(false);
   const filtersRef = useRef<Filters | null>(null);
   const selectedRef = useRef<string | null>(null);
+  const parentIndexRef = useRef(0);
+  const initializedRef = useRef(false);
   const runQueryRef = useRef<(next: Filters, append: boolean) => void>(() => undefined);
 
   rowsRef.current = rows;
@@ -56,6 +58,7 @@ export function App() {
     requestIdRef.current = requestId;
     latestRequestRef.current = requestId;
     loadingRef.current = true;
+    setError(null);
     post({
       type: 'query',
       requestId,
@@ -76,7 +79,10 @@ export function App() {
           setInit(message.state);
           pageSizeRef.current = message.state.pageSize;
           const persisted = getState<PersistedState>();
-          const usable = persisted && persisted.root === message.state.repo.root ? persisted.filters : undefined;
+          const usable = !initializedRef.current && persisted && persisted.root === message.state.repo.root
+            ? persisted.filters
+            : undefined;
+          initializedRef.current = true;
           const next = usable ?? message.state.filters;
           setFilters(next);
           break;
@@ -108,6 +114,7 @@ export function App() {
         case 'focusCommit': {
           setFocusHash(message.hash);
           setSelected(message.hash);
+          parentIndexRef.current = 0;
           setDetail(null);
           setDetailLoading(true);
           setDetailError(null);
@@ -165,20 +172,21 @@ export function App() {
       setFocusHash(null);
       return;
     }
-    if (hasMore && !loadingRef.current) {
-      runQueryRef.current(filtersRef.current ?? ({} as Filters), true);
+    if (hasMore && !loadingRef.current && filtersRef.current) {
+      runQueryRef.current(filtersRef.current, true);
     }
   }, [focusHash, rows, hasMore]);
 
-  const select = (hash: string) => {
-    if (selectedRef.current === hash) {
+  const select = (hash: string, parentIndex = 0) => {
+    if (selectedRef.current === hash && parentIndexRef.current === parentIndex) {
       return;
     }
+    parentIndexRef.current = parentIndex;
     setSelected(hash);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(true);
-    post({ type: 'selectCommit', hash });
+    post({ type: 'selectCommit', hash, parentIndex });
   };
 
   const toggleCompare = (hash: string) => {
@@ -277,6 +285,7 @@ export function App() {
           selected={selected}
           compare={compare}
           onSelectParent={select}
+          onSelectParentIndex={(index) => selected && select(selected, index)}
           onOpenFileDiff={(file) =>
             selected &&
             post({

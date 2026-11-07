@@ -9,6 +9,7 @@ interface Props {
   selected: string | null;
   compare: string | null;
   onSelectParent: (hash: string) => void;
+  onSelectParentIndex: (index: number) => void;
   onOpenFileDiff: (file: FileChange) => void;
   onOpenFileHistory: (filePath: string) => void;
   onOpenFileAtRevision: (filePath: string) => void;
@@ -48,7 +49,7 @@ export function DetailPane(props: Props) {
   useEffect(() => {
     setExpanded(false);
     setFileQuery('');
-  }, [detail?.hash]);
+  }, [detail?.hash, detail?.parentIndex]);
 
   if (!selected) {
     return (
@@ -137,6 +138,21 @@ export function DetailPane(props: Props) {
           <span className="diffstat__del">−{detail.deletions}</span>
         </span>
       </div>
+
+      {detail.parents.length > 1 && (
+        <div className="parents-toggle">
+          <span className="muted">Diff against</span>
+          {detail.parents.map((parent, index) => (
+            <button
+              key={parent}
+              className={`btn btn--small ${index === detail.parentIndex ? 'btn--active' : ''}`}
+              onClick={() => props.onSelectParentIndex(index)}
+            >
+              parent {index + 1} ({parent.slice(0, 7)})
+            </button>
+          ))}
+        </div>
+      )}
 
       {detail.files.length > 8 && (
         <input
