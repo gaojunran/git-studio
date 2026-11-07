@@ -85,7 +85,13 @@ export function GraphOverlay(props: Props) {
   }
 
   return (
-    <svg className="graph" width={width} height={height} aria-hidden="true">
+    <svg
+      className="graph"
+      width={width}
+      height={height}
+      style={{ top: startIndex * rowHeight }}
+      aria-hidden="true"
+    >
       {paths}
       {nodes}
     </svg>
