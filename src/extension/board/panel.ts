@@ -11,8 +11,9 @@ import type {
 import { pickRemoteUrl } from '../git/remote';
 import { GitHubProvider, parseGitHubRemote, type BoardProvider, type GitHubRepo } from './github';
 import { GuestProvider, guestRepoFor } from './guest/provider';
+import { TrackerProvider } from './guest/tracker';
 import type { BoardContext } from './service';
-import type { GuestRecord } from './guest/store';
+import type { SourceControlGuestRecord, TrackerGuestRecord } from './guest/store';
 import { renderBoardHtml } from '../host/html';
 import type { Services } from '../host/services';
 
@@ -99,6 +100,10 @@ export class BoardPanel {
   private providers: BoardProviderInfo[] = [];
   private providerId: string | null = null;
   private preferredProviderId: string | null = null;
+  private tracker: TrackerProvider | undefined;
+  private trackers: BoardProviderInfo[] = [];
+  private trackerId: string | null = null;
+  private preferredTrackerId: string | null = null;
   private authenticated = false;
   private ready = false;
   private busy = false;
@@ -257,6 +262,16 @@ export class BoardPanel {
         await this.refreshState();
         await this.reload();
         return;
+      case 'selectTracker':
+        this.preferredTrackerId = message.trackerId;
+        await this.refreshState();
+        return;
+      case 'trackerList':
+        await this.trackerList(message.requestId, message.state, message.cursor);
+        return;
+      case 'trackerDetail':
+        await this.trackerDetail(message.requestId, message.id);
+        return;
       case 'connectGithub':
         await this.connectGithub();
         return;
@@ -282,8 +297,8 @@ export class BoardPanel {
       await this.connectGithub();
       return;
     }
-    const record = this.board.guests.list().find((entry) => `ext-${entry.id}` === providerId);
-    if (!record) {
+    const record = this.board.guests.list().find((entry) => entry.role === 'source-control' && `ext-${entry.id}` === providerId);
+    if (!record || record.role !== 'source-control') {
       void vscode.window.showWarningMessage('Git Studio: that integration is no longer installed.');
       return;
     }
@@ -329,8 +344,9 @@ export class BoardPanel {
 
     const remote = this.remoteUrl();
     const guestMatches = this.board.guests.list()
+      .filter((record) => record.role === 'source-control')
       .map((record) => ({ record, repo: guestRepoFor(record, remote) }))
-      .filter((entry): entry is { record: GuestRecord; repo: NonNullable<ReturnType<typeof guestRepoFor>> } => Boolean(entry.repo));
+      .filter((entry): entry is { record: SourceControlGuestRecord; repo: BoardRepoInfo } => Boolean(entry.repo));
     for (const { record, repo } of guestMatches) {
       this.providers.push({
         id: `ext-${record.id}`,
@@ -388,14 +404,70 @@ export class BoardPanel {
 
   private async refreshState(): Promise<void> {
     await this.buildProvider();
+    await this.buildTracker();
     this.panel.title = `Issues and PRs — ${this.repo?.name ?? 'repository'}`;
     this.post({
       type: 'state',
       repo: this.repoInfo,
       providers: this.providers,
       providerId: this.providerId,
-      authenticated: this.authenticated
+      authenticated: this.authenticated,
+      trackers: this.trackers,
+      trackerId: this.trackerId
     });
+  }
+
+  private async buildTracker(): Promise<void> {
+    this.tracker = undefined;
+    this.trackers = [];
+    this.trackerId = null;
+    const records = this.board.guests.list().filter((record): record is TrackerGuestRecord => record.role === 'tracker');
+    for (const record of records) {
+      this.trackers.push({
+        id: `ext-${record.id}`,
+        label: record.tracker.label,
+        kinds: [],
+        builtin: false,
+        packageRoot: record.packageRoot
+      });
+    }
+    if (records.length === 0) {
+      return;
+    }
+    const record = records.find((entry) => `ext-${entry.id}` === this.preferredTrackerId) ?? records[0];
+    this.trackerId = `ext-${record.id}`;
+    this.preferredTrackerId = this.trackerId;
+    const credential = await this.board.guestService.credential(record);
+    if (credential) {
+      this.tracker = new TrackerProvider(record, this.board.guestService);
+    }
+  }
+
+  private async trackerList(requestId: number, state: string, cursor?: string | null): Promise<void> {
+    if (!this.tracker) {
+      this.post({ type: 'trackerList', requestId, result: { items: [], cursor: null, hasMore: false } });
+      return;
+    }
+    try {
+      const result = await this.tracker.list(state, cursor);
+      this.post({ type: 'trackerList', requestId, result });
+    } catch (error) {
+      this.post({ type: 'error', requestId, message: error instanceof Error ? error.message : String(error) });
+      this.post({ type: 'trackerList', requestId, result: { items: [], cursor: null, hasMore: false } });
+    }
+  }
+
+  private async trackerDetail(requestId: number, id: string): Promise<void> {
+    if (!this.tracker) {
+      this.post({ type: 'trackerDetail', requestId, detail: null });
+      return;
+    }
+    try {
+      const detail = await this.tracker.detail(id);
+      this.post({ type: 'trackerDetail', requestId, detail });
+    } catch (error) {
+      this.post({ type: 'trackerDetail', requestId, detail: null, error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private async reload(): Promise<void> {

@@ -111,12 +111,69 @@ export interface BoardRepoInfo {
   kinds: BoardKind[];
 }
 
+export type BoardTrackerStateCategory =
+  | 'triage'
+  | 'backlog'
+  | 'todo'
+  | 'in-progress'
+  | 'done'
+  | 'canceled'
+  | null;
+
+export type BoardTrackerPriority = 'none' | 'urgent' | 'high' | 'medium' | 'low';
+
+export interface BoardTrackerState {
+  id?: string;
+  name: string;
+  category: BoardTrackerStateCategory;
+}
+
+export interface BoardTrackerItem {
+  id: string;
+  identifier: string;
+  title: string;
+  url: string;
+  state: BoardTrackerState | null;
+  priority: BoardTrackerPriority;
+  labels: BoardLabel[];
+  assignee: BoardAuthor | null;
+  container: { id: string; key: string; name: string } | null;
+  updatedAt: string;
+}
+
+export interface BoardTrackerDetail extends BoardTrackerItem {
+  description: string | null;
+  comments: BoardComment[];
+  children?: BoardTrackerItem[];
+}
+
+export interface BoardTrackerListResult {
+  items: BoardTrackerItem[];
+  cursor: string | null;
+  hasMore: boolean;
+}
+
 export interface BoardStateMessage {
   type: 'state';
   repo: BoardRepoInfo | null;
   providers: BoardProviderInfo[];
   providerId: string | null;
   authenticated: boolean;
+  trackers?: BoardProviderInfo[];
+  trackerId?: string | null;
+  error?: string;
+}
+
+export interface BoardTrackerListMessage {
+  type: 'trackerList';
+  requestId: number;
+  result: BoardTrackerListResult;
+}
+
+export interface BoardTrackerDetailMessage {
+  type: 'trackerDetail';
+  requestId: number;
+  detail: BoardTrackerDetail | null;
   error?: string;
 }
 
@@ -163,6 +220,8 @@ export type BoardHostMessage =
   | BoardDetailMessage
   | BoardLabelsMessage
   | BoardReviewersMessage
+  | BoardTrackerListMessage
+  | BoardTrackerDetailMessage
   | BoardBusyMessage
   | BoardErrorMessage;
 
@@ -184,4 +243,7 @@ export type BoardWebviewMessage =
   | { type: 'setLabels'; number: number; names: string[] }
   | { type: 'setReviewers'; number: number; names: string[] }
   | { type: 'review'; number: number; verdict?: 'approve' | 'request-changes'; votes?: Record<string, number>; body?: string }
+  | { type: 'selectTracker'; trackerId: string }
+  | { type: 'trackerList'; requestId: number; state: string; cursor?: string | null }
+  | { type: 'trackerDetail'; requestId: number; id: string }
   | { type: 'openSettings' };

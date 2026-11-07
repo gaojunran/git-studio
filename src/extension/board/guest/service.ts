@@ -5,12 +5,9 @@ import http from 'node:http';
 import net from 'node:net';
 import * as path from 'node:path';
 import type * as vscode from 'vscode';
-import type { GuestManifest } from './manifest';
 import type { GuestRecord } from './store';
 
 const WIRE_VERSION = 1;
-const PROVIDER_PATH = '/source-control';
-const OUTBOUND_PATH = '/source-control/outbound';
 const RESPONSE_MAX = 8_000_000;
 
 interface Credential {
@@ -21,10 +18,26 @@ interface Credential {
 interface OutboundHandle {
   origin: string;
   credential: Credential | null;
-  header: GuestManifest['descriptor']['token']['header'];
-  scheme: GuestManifest['descriptor']['token']['scheme'];
+  header: 'authorization' | 'private-token';
+  scheme: 'bearer' | 'token' | 'basic' | 'none';
   methods: Set<string>;
+  callbackPath: string;
   deadline: number;
+}
+
+function tokenConfig(record: GuestRecord): { header: 'authorization' | 'private-token'; scheme: 'bearer' | 'token' | 'basic' | 'none' } {
+  if (record.role === 'source-control') {
+    return record.descriptor.token;
+  }
+  return record.tracker.auth.token ?? { header: 'authorization', scheme: 'bearer' };
+}
+
+function providerPath(record: GuestRecord): string {
+  return record.role === 'tracker' ? '/tracker' : '/source-control';
+}
+
+function outboundPath(record: GuestRecord): string {
+  return record.role === 'tracker' ? '/tracker/outbound' : '/source-control/outbound';
 }
 
 interface Runtime {
@@ -89,6 +102,17 @@ export class GuestService {
   }
 
   async connect(record: GuestRecord, token: string, login?: string): Promise<void> {
+    if (record.role === 'tracker') {
+      await this.request(record, 'auth.probe', {});
+      await this.secrets.store(this.tokenKey(record), token);
+      if (login) {
+        await this.secrets.store(this.usernameKey(record), login);
+      } else {
+        await this.secrets.delete(this.usernameKey(record));
+      }
+      await this.request(record, 'items.list', { state: 'open', people: 'any', priority: 'all' });
+      return;
+    }
     await this.request(record, 'auth.verify', {}, { token, login });
     await this.secrets.store(this.tokenKey(record), token);
     if (login) {
@@ -125,7 +149,8 @@ export class GuestService {
       session: {
         instance: record.instance,
         handle,
-        user: null
+        user: null,
+        account: null
       },
       input
     });
@@ -135,7 +160,7 @@ export class GuestService {
         {
           host: '127.0.0.1',
           port: runtime.port,
-          path: PROVIDER_PATH,
+          path: providerPath(record),
           method: 'POST',
           headers: {
             authorization: `Bearer ${runtime.token}`,
@@ -234,12 +259,14 @@ export class GuestService {
 
   private mintHandle(record: GuestRecord, credential: Credential | null): string {
     const handle = randomUUID();
+    const token = tokenConfig(record);
     this.handles.set(handle, {
       origin: new URL(record.instance).origin,
       credential,
-      header: record.descriptor.token.header,
-      scheme: record.descriptor.token.scheme,
-      methods: new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+      header: token.header,
+      scheme: token.scheme,
+      methods: new Set(record.role === 'tracker' ? ['GET'] : ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+      callbackPath: outboundPath(record),
       deadline: Date.now() + 30_000
     });
     return handle;
@@ -274,7 +301,7 @@ export class GuestService {
       response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       response.end(text);
     };
-    if (request.url !== OUTBOUND_PATH || request.method !== 'POST') {
+    if ((request.url !== '/source-control/outbound' && request.url !== '/tracker/outbound') || request.method !== 'POST') {
       send(404, { error: { message: 'Unknown callback route', code: 'NOT_FOUND' } });
       return;
     }
@@ -287,6 +314,10 @@ export class GuestService {
     const handle = this.handles.get(handleId);
     if (!handle || handle.deadline < Date.now()) {
       send(401, { error: { message: 'Unknown or expired handle', code: 'HANDLE_UNKNOWN' } });
+      return;
+    }
+    if (request.url !== handle.callbackPath) {
+      send(403, { error: { message: 'The handle does not belong to this route', code: 'WRONG_ROUTE' } });
       return;
     }
 

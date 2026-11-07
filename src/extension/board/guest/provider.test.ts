@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { guestRepoFor, GuestProvider } from './provider';
 import type { GuestService } from './service';
-import type { GuestRecord } from './store';
+import type { SourceControlGuestRecord } from './store';
 
 const descriptor = {
   label: 'Teahouse',
   capabilities: { issues: true, changeRequests: true }
-} as GuestRecord['descriptor'];
+} as SourceControlGuestRecord['descriptor'];
 
-const record: GuestRecord = {
+const record: SourceControlGuestRecord = {
+  role: 'source-control',
   id: 'source-control-provider',
   name: 'Teahouse Git host',
   packageRoot: '/tmp/teahouse',
@@ -44,13 +45,13 @@ describe('guestRepoFor', () => {
   });
 
   it('only exposes the kinds the descriptor declares', () => {
-    const issuesOnly = { ...record, descriptor: { ...descriptor, capabilities: { issues: true, changeRequests: false } } as GuestRecord['descriptor'] };
+    const issuesOnly = { ...record, descriptor: { ...descriptor, capabilities: { issues: true, changeRequests: false } } as SourceControlGuestRecord['descriptor'] };
     expect(guestRepoFor(issuesOnly, 'https://gitea.example.com/mona/teapot')?.kinds).toEqual(['issue']);
   });
 });
 
 describe('GuestProvider writes', () => {
-  const fullRecord: GuestRecord = {
+  const fullRecord: SourceControlGuestRecord = {
     ...record,
     descriptor: {
       label: 'Teahouse',
@@ -66,14 +67,14 @@ describe('GuestProvider writes', () => {
         reviewModel: 'verdict'
       },
       limits: { labelsMax: 100, reviewersMax: 50, commentMaxLength: 1000, reviewerId: 'login' }
-    } as unknown as GuestRecord['descriptor']
+    } as unknown as SourceControlGuestRecord['descriptor']
   };
 
   const create = () => {
     const mutations: Array<{ kind: string; input: Record<string, unknown>; context: Record<string, unknown>; route: string }> = [];
     const requests: string[] = [];
     const service = {
-      request: async (_record: GuestRecord, method: string) => {
+      request: async (_record: SourceControlGuestRecord, method: string) => {
         requests.push(method);
         if (method === 'changeRequestContext') {
           return {
@@ -96,7 +97,7 @@ describe('GuestProvider writes', () => {
         if (method === 'listReviewerCandidates') return [{ login: 'mona' }, { login: 'octo' }];
         return [];
       },
-      mutate: async (_record: GuestRecord, kind: string, input: Record<string, unknown>, context: Record<string, unknown>, route: string) => {
+      mutate: async (_record: SourceControlGuestRecord, kind: string, input: Record<string, unknown>, context: Record<string, unknown>, route: string) => {
         mutations.push({ kind, input, context, route });
         return {};
       }

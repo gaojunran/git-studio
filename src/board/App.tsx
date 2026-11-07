@@ -9,7 +9,9 @@ import type {
   BoardLabel,
   BoardProviderInfo,
   BoardRepoInfo,
-  BoardStateFilter
+  BoardStateFilter,
+  BoardTrackerDetail,
+  BoardTrackerItem
 } from '../shared/board';
 import { onMessage, post } from './bridge';
 
@@ -777,10 +779,117 @@ function DetailPane({
   );
 }
 
+function TrackerWorkspace({
+  items,
+  detail,
+  selected,
+  loading,
+  error,
+  hasMore,
+  onSelect,
+  onLoadMore,
+  onOpen
+}: {
+  items: BoardTrackerItem[];
+  detail: BoardTrackerDetail | null;
+  selected: string | null;
+  loading: boolean;
+  error?: string;
+  hasMore: boolean;
+  onSelect: (item: BoardTrackerItem) => void;
+  onLoadMore: () => void;
+  onOpen: (url: string) => void;
+}) {
+  return (
+    <div className="workspace">
+      <aside className="listpane">
+        <div className="list">
+          {loading && items.length === 0 ? <div className="list__status">Loading…</div> : null}
+          {error ? <div className="list__status error">{error}</div> : null}
+          {!loading && !error && items.length === 0 ? <div className="list__status">No work items found.</div> : null}
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`row${selected === item.id ? ' row--active' : ''}`}
+              aria-current={selected === item.id || undefined}
+              onClick={() => onSelect(item)}
+            >
+              <span className="row__content">
+                <span className="row__title">{item.title}</span>
+                <span className="row__meta">
+                  <span className="row__number">{item.identifier}</span>
+                  {item.state ? <span className="row__meta-item">{item.state.name}</span> : null}
+                  {item.assignee ? <span className="row__meta-item">{item.assignee.login}</span> : null}
+                  {item.labels.slice(0, 2).map((label) => <LabelChip key={label.name} {...label} />)}
+                </span>
+              </span>
+            </button>
+          ))}
+          {hasMore ? (
+            <button className="btn list__more" disabled={loading} onClick={onLoadMore}>
+              {loading ? 'Loading…' : 'Load more'}
+            </button>
+          ) : null}
+        </div>
+      </aside>
+      <main className="detailpane">
+        {error ? <div className="detail__error">{error}</div> : null}
+        {!detail ? (
+          <div className="detail detail--empty">{loading ? 'Loading…' : 'Select a work item to preview it.'}</div>
+        ) : (
+          <div className="detail">
+            <header className="detail__header">
+              <div className="detail__kicker">
+                <span className="detail__ref"><span className="detail__number">{detail.identifier}</span></span>
+                <div className="detail__actions">
+                  <button className="ghost-link" type="button" onClick={() => onOpen(detail.url)}>
+                    Open<Icon name="external" />
+                  </button>
+                </div>
+              </div>
+              <h1 className="detail__title">{detail.title}</h1>
+            </header>
+            <div className="detail__body">
+              <dl className="meta">
+                <dt>State</dt>
+                <dd>{detail.state ? detail.state.name : 'None'}</dd>
+                <dt>Priority</dt>
+                <dd>{detail.priority}</dd>
+                <dt>Assignee</dt>
+                <dd>{detail.assignee ? detail.assignee.login : 'None'}</dd>
+                {detail.container ? (<><dt>Project</dt><dd>{detail.container.name}</dd></>) : null}
+                <dt>Labels</dt>
+                <dd>{detail.labels.length > 0 ? detail.labels.map((label) => <LabelChip key={label.name} {...label} />) : <span className="meta__none">None</span>}</dd>
+              </dl>
+              <Markdown body={detail.description || '_No description._'} />
+              <section className="comments">
+                <h2>{detail.comments.length} comment{detail.comments.length === 1 ? '' : 's'}</h2>
+                {detail.comments.map((comment) => <CommentView key={comment.id} comment={comment} />)}
+              </section>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
 export function App() {
   const [repo, setRepo] = useState<BoardRepoInfo | null>(null);
   const [providers, setProviders] = useState<BoardProviderInfo[]>([]);
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [trackers, setTrackers] = useState<BoardProviderInfo[]>([]);
+  const [trackerId, setTrackerId] = useState<string | null>(null);
+  const [trackerOpen, setTrackerOpen] = useState(false);
+  const [trackerState, setTrackerState] = useState('open');
+  const [trackerItems, setTrackerItems] = useState<BoardTrackerItem[]>([]);
+  const [trackerDetail, setTrackerDetail] = useState<BoardTrackerDetail | null>(null);
+  const [trackerSelected, setTrackerSelected] = useState<string | null>(null);
+  const [trackerLoading, setTrackerLoading] = useState(false);
+  const [trackerError, setTrackerError] = useState<string | undefined>();
+  const [trackerCursor, setTrackerCursor] = useState<string | null>(null);
+  const [trackerHasMore, setTrackerHasMore] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [stateError, setStateError] = useState<string | undefined>();
   const [kind, setKind] = useState<BoardKind>('issue');
@@ -805,6 +914,8 @@ export function App() {
   const detailKey = useRef<string | null>(null);
   const labelsRequest = useRef(0);
   const reviewersRequest = useRef(0);
+  const trackerRequest = useRef(0);
+  const trackerDetailRequest = useRef(0);
   const activeProvider = useRef<string | null>(null);
   const searchTimer = useRef<number | undefined>(undefined);
 
@@ -824,6 +935,8 @@ export function App() {
         setRepo(message.repo);
         setProviders(message.providers);
         setProviderId(message.providerId);
+        setTrackers(message.trackers ?? []);
+        setTrackerId(message.trackerId ?? null);
         setAuthenticated(message.authenticated);
         setStateError(message.error);
         return;
@@ -884,6 +997,26 @@ export function App() {
           return;
         }
         setReviewerOptions(message.reviewers);
+        return;
+      }
+      if (message.type === 'trackerList') {
+        if (message.requestId !== trackerRequest.current) {
+          return;
+        }
+        setTrackerItems((current) => (message.result.cursor && current.length > 0 ? [...current, ...message.result.items] : message.result.items));
+        setTrackerCursor(message.result.cursor);
+        setTrackerHasMore(message.result.hasMore);
+        setTrackerLoading(false);
+        setTrackerError(undefined);
+        return;
+      }
+      if (message.type === 'trackerDetail') {
+        if (message.requestId !== trackerDetailRequest.current) {
+          return;
+        }
+        setTrackerDetail(message.detail);
+        setTrackerLoading(false);
+        setTrackerError(message.error);
         return;
       }
       if (message.type === 'busy') {
@@ -951,6 +1084,38 @@ export function App() {
     post({ type: 'detail', requestId: id, kind: item.kind, number: item.number });
   };
 
+  const loadTracker = (state: string, append: boolean) => {
+    if (!trackerId) {
+      return;
+    }
+    const id = ++requestId.current;
+    trackerRequest.current = id;
+    setTrackerLoading(true);
+    if (!append) {
+      setTrackerError(undefined);
+      setTrackerItems([]);
+      setTrackerDetail(null);
+      setTrackerSelected(null);
+    }
+    post({ type: 'trackerList', requestId: id, state, cursor: append ? trackerCursor : null });
+  };
+
+  useEffect(() => {
+    if (trackerOpen && trackerId) {
+      loadTracker(trackerState, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackerOpen, trackerId, trackerState]);
+
+  const selectTrackerItem = (item: BoardTrackerItem) => {
+    setTrackerSelected(item.id);
+    setTrackerDetail(null);
+    setTrackerLoading(true);
+    const id = ++requestId.current;
+    trackerDetailRequest.current = id;
+    post({ type: 'trackerDetail', requestId: id, id: item.id });
+  };
+
   const kinds = repo?.kinds ?? (['issue', 'pull', 'discussion'] as BoardKind[]);
 
   useEffect(() => {
@@ -958,6 +1123,12 @@ export function App() {
       setKind(kinds[0] ?? 'issue');
     }
   }, [kinds, kind]);
+
+  useEffect(() => {
+    if (!repo && trackers.length > 0) {
+      setTrackerOpen(true);
+    }
+  }, [repo, trackers.length]);
 
   const repoLabel = repo ? `${repo.owner}/${repo.name}` : '';
 
@@ -980,37 +1151,49 @@ export function App() {
         </div>
       </header>
 
-      {!repo ? (
+      {!repo && trackers.length === 0 ? (
         <div className="empty">
           <h2>No supported remote</h2>
           <p>This repository has no supported Git host remote. Add one, or install an OpenChamber integration provider.</p>
         </div>
-      ) : !authenticated ? (
+      ) : !authenticated && !trackerOpen ? (
         <div className="empty">
-          <h2>Connect {repo.providerLabel}</h2>
+          <h2>Connect {repo?.providerLabel ?? 'provider'}</h2>
           <p>Git Studio needs a token with repository read access to list issues, pull requests and discussions.</p>
           {stateError ? <p className="error">{stateError}</p> : null}
           <button className="btn btn--primary" onClick={() => post({ type: 'connectProvider', providerId: providerId ?? 'github' })}>
-            Connect {repo.providerLabel}
+            Connect {repo?.providerLabel ?? 'provider'}
           </button>
         </div>
       ) : (
         <>
           <div className="toolbar">
             <div className="tabs" role="tablist" aria-label="Item kind">
-              {kinds.map((entry) => (
+              {repo && authenticated ? kinds.map((entry) => (
                 <button
                   key={entry}
                   type="button"
                   role="tab"
-                  aria-selected={kind === entry}
-                  className={`tab${kind === entry ? ' tab--active' : ''}`}
-                  onClick={() => setKind(entry)}
+                  aria-selected={!trackerOpen && kind === entry}
+                  className={`tab${!trackerOpen && kind === entry ? ' tab--active' : ''}`}
+                  onClick={() => { setTrackerOpen(false); setKind(entry); }}
                 >
                   <Icon name={kindIconName(entry)} className="tab__icon" />
                   {KIND_LABEL[entry]}
                 </button>
-              ))}
+              )) : null}
+              {trackers.length > 0 ? (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={trackerOpen}
+                  className={`tab${trackerOpen ? ' tab--active' : ''}`}
+                  onClick={() => setTrackerOpen(true)}
+                >
+                  <Icon name="record" className="tab__icon" />
+                  Tracker
+                </button>
+              ) : null}
             </div>
             {repo ? (
               <span className="scope" title={repoLabel}>
@@ -1019,38 +1202,57 @@ export function App() {
               </span>
             ) : null}
             <div className="toolbar__right">
-              <label className="search">
-                <Icon name="search" className="search__icon" />
-                <input
-                  value={search}
-                  placeholder={`Search ${KIND_LABEL[kind].toLowerCase()}…`}
-                  aria-label={`Search ${KIND_LABEL[kind].toLowerCase()}`}
-                  onChange={(event) => onSearchChange(event.target.value)}
-                />
-                {search ? (
-                  <button
-                    type="button"
-                    className="search__clear"
-                    aria-label="Clear search"
-                    title="Clear search"
-                    onClick={() => onSearchChange('')}
+              {trackerOpen ? (
+                <div className="filter">
+                  <select
+                    value={trackerState}
+                    aria-label="Filter work items by state"
+                    onChange={(event) => setTrackerState(event.target.value)}
                   >
-                    <Icon name="close" />
-                  </button>
-                ) : null}
-              </label>
-              <div className="filter">
-                <select
-                  value={filter}
-                  aria-label="Filter by state"
-                  onChange={(event) => setFilter(event.target.value as BoardStateFilter)}
-                >
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="all">All</option>
-                </select>
-                <Icon name="chevron" className="filter__chevron" />
-              </div>
+                    <option value="open">Open</option>
+                    <option value="all">All</option>
+                    <option value="todo">Todo</option>
+                    <option value="in-progress">In progress</option>
+                    <option value="done">Done</option>
+                  </select>
+                  <Icon name="chevron" className="filter__chevron" />
+                </div>
+              ) : (
+                <>
+                  <label className="search">
+                    <Icon name="search" className="search__icon" />
+                    <input
+                      value={search}
+                      placeholder={`Search ${KIND_LABEL[kind].toLowerCase()}…`}
+                      aria-label={`Search ${KIND_LABEL[kind].toLowerCase()}`}
+                      onChange={(event) => onSearchChange(event.target.value)}
+                    />
+                    {search ? (
+                      <button
+                        type="button"
+                        className="search__clear"
+                        aria-label="Clear search"
+                        title="Clear search"
+                        onClick={() => onSearchChange('')}
+                      >
+                        <Icon name="close" />
+                      </button>
+                    ) : null}
+                  </label>
+                  <div className="filter">
+                    <select
+                      value={filter}
+                      aria-label="Filter by state"
+                      onChange={(event) => setFilter(event.target.value as BoardStateFilter)}
+                    >
+                      <option value="open">Open</option>
+                      <option value="closed">Closed</option>
+                      <option value="all">All</option>
+                    </select>
+                    <Icon name="chevron" className="filter__chevron" />
+                  </div>
+                </>
+              )}
               <button
                 type="button"
                 className="icon-btn icon-btn--outlined"
@@ -1063,7 +1265,20 @@ export function App() {
             </div>
           </div>
 
-          <div className="workspace">
+          {trackerOpen ? (
+            <TrackerWorkspace
+              items={trackerItems}
+              detail={trackerDetail}
+              selected={trackerSelected}
+              loading={trackerLoading}
+              error={trackerError}
+              hasMore={trackerHasMore}
+              onSelect={selectTrackerItem}
+              onLoadMore={() => loadTracker(trackerState, true)}
+              onOpen={(url) => post({ type: 'openExternal', url })}
+            />
+          ) : (
+            <div className="workspace">
             <aside className="listpane">
               <div className="list">
                 {listLoading && items.length === 0 ? <div className="list__status">Loading…</div> : null}
@@ -1139,6 +1354,7 @@ export function App() {
               />
             </main>
           </div>
+          )}
         </>
       )}
     </div>

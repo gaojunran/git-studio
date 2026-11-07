@@ -1,24 +1,59 @@
 import type * as vscode from 'vscode';
-import type { GuestManifest } from './manifest';
+import type { SourceControlContribution, TrackerContribution } from '@openchamber/sdk';
 
-export interface GuestRecord {
+export type GuestRole = 'source-control' | 'tracker';
+
+export interface GuestBase {
   id: string;
   name: string;
   packageRoot: string;
   entry: string;
   version: string;
   instance: string;
-  descriptor: GuestManifest['descriptor'];
   source?: { kind: 'folder' | 'git' | 'archive'; url?: string };
 }
 
+export interface SourceControlGuestRecord extends GuestBase {
+  role: 'source-control';
+  descriptor: SourceControlContribution;
+}
+
+export interface TrackerGuestRecord extends GuestBase {
+  role: 'tracker';
+  tracker: TrackerContribution;
+}
+
+export type GuestRecord = SourceControlGuestRecord | TrackerGuestRecord;
+
 const KEY = 'gitStudio.board.guests.v1';
+
+type LegacyRecord = GuestBase & { descriptor?: SourceControlContribution; tracker?: TrackerContribution; role?: GuestRole };
+
+function normalize(record: GuestRecord | LegacyRecord): GuestRecord | undefined {
+  const role = record.role;
+  if (role === 'source-control') {
+    return record as SourceControlGuestRecord;
+  }
+  if (role === 'tracker') {
+    return record as TrackerGuestRecord;
+  }
+  if (record.tracker) {
+    return { ...record, role: 'tracker', tracker: record.tracker };
+  }
+  if (record.descriptor) {
+    return { ...record, role: 'source-control', descriptor: record.descriptor };
+  }
+  return undefined;
+}
 
 export class GuestStore {
   constructor(private readonly state: vscode.Memento) {}
 
   list(): GuestRecord[] {
-    return this.state.get<GuestRecord[]>(KEY, []);
+    return this.state.get<GuestRecord[]>(KEY, []).flatMap((record) => {
+      const normalized = normalize(record);
+      return normalized ? [normalized] : [];
+    });
   }
 
   async add(record: GuestRecord): Promise<void> {

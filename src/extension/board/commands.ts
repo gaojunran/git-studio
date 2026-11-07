@@ -4,30 +4,51 @@ import { createHash } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
-import { readGuestManifest } from './guest/manifest';
+import { readGuestManifest, type GuestManifest } from './guest/manifest';
 import type { GuestRecord } from './guest/store';
 import type { BoardContext } from './service';
 import { BoardPanel } from './panel';
 
 const execFileAsync = promisify(execFile);
 
-function instanceAllowed(raw: string, descriptor: GuestRecord['descriptor']): string {
+function instanceAllowed(raw: string, manifest: GuestManifest): string {
   let url: URL;
   try {
     url = new URL(raw.trim());
   } catch {
     throw new Error('Enter a full URL, such as https://gitea.example.com');
   }
-  if (url.protocol !== 'https:' && !(descriptor.instances.allowLoopbackHttp && url.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(url.hostname))) {
+  if (manifest.role === 'tracker') {
+    const loopback = ['127.0.0.1', 'localhost', '::1'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+      throw new Error('The tracker must use https (http is allowed only on this machine).');
+    }
+    return url.origin;
+  }
+  const instances = manifest.descriptor.instances;
+  if (url.protocol !== 'https:' && !(instances.allowLoopbackHttp && url.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(url.hostname))) {
     throw new Error('The instance must use https (http is allowed only on loopback).');
   }
-  if (url.port && !descriptor.instances.allowPort) {
+  if (url.port && !instances.allowPort) {
     throw new Error('This integration does not allow a port in the instance address.');
   }
   return url.origin;
 }
 
-async function pickInstance(descriptor: GuestRecord['descriptor']): Promise<string | undefined> {
+async function pickInstance(manifest: GuestManifest): Promise<string | undefined> {
+  if (manifest.role === 'tracker') {
+    const instances = manifest.tracker.instances;
+    if (instances.kind === 'fixed') {
+      return instances.origin;
+    }
+    return vscode.window.showInputBox({
+      title: `${manifest.tracker.label} server`,
+      prompt: instances.label,
+      placeHolder: instances.placeholder,
+      ignoreFocusOut: true
+    });
+  }
+  const descriptor = manifest.descriptor;
   const defaults = descriptor.instances.defaultInstances;
   if (defaults.length === 1) {
     return defaults[0];
@@ -47,6 +68,21 @@ async function pickInstance(descriptor: GuestRecord['descriptor']): Promise<stri
   });
 }
 
+function recordOf(manifest: GuestManifest, instance: string, source: GuestRecord['source']): GuestRecord {
+  const base = {
+    id: manifest.id,
+    name: manifest.name,
+    packageRoot: manifest.packageRoot,
+    entry: manifest.entry,
+    version: manifest.version,
+    instance: instanceAllowed(instance, manifest),
+    source
+  };
+  return manifest.role === 'tracker'
+    ? { ...base, role: 'tracker', tracker: manifest.tracker }
+    : { ...base, role: 'source-control', descriptor: manifest.descriptor };
+}
+
 export async function installIntegration(board: BoardContext, options: { folder?: string; instance?: string; token?: string; login?: string } = {}): Promise<void> {
   const picked = options.folder
     ? [vscode.Uri.file(options.folder)]
@@ -63,20 +99,11 @@ export async function installIntegration(board: BoardContext, options: { folder?
 
   try {
     const manifest = await readGuestManifest(folder.fsPath);
-    const instance = options.instance ?? await pickInstance(manifest.descriptor);
+    const instance = options.instance ?? await pickInstance(manifest);
     if (!instance) {
       return;
     }
-    const record: GuestRecord = {
-      id: manifest.id,
-      name: manifest.name,
-      packageRoot: manifest.packageRoot,
-      entry: manifest.entry,
-      version: manifest.version,
-      instance: instanceAllowed(instance, manifest.descriptor),
-      descriptor: manifest.descriptor,
-      source: { kind: 'folder' }
-    };
+    const record = recordOf(manifest, instance, { kind: 'folder' });
     await board.guests.add(record);
     if (options.token) {
       await board.guestService.connect(record, options.token, options.login);
@@ -121,20 +148,11 @@ export async function installIntegrationFromGit(
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
     });
     const manifest = await readGuestManifest(target);
-    const instance = options.instance ?? await pickInstance(manifest.descriptor);
+    const instance = options.instance ?? await pickInstance(manifest);
     if (!instance) {
       return;
     }
-    const record: GuestRecord = {
-      id: manifest.id,
-      name: manifest.name,
-      packageRoot: manifest.packageRoot,
-      entry: manifest.entry,
-      version: manifest.version,
-      instance: instanceAllowed(instance, manifest.descriptor),
-      descriptor: manifest.descriptor,
-      source: { kind: 'git', url }
-    };
+    const record = recordOf(manifest, instance, { kind: 'git', url });
     await board.guests.add(record);
     if (options.token) {
       await board.guestService.connect(record, options.token, options.login);
@@ -190,20 +208,11 @@ export async function installIntegrationFromArchive(board: BoardContext, options
     if (!manifest) {
       throw manifestError;
     }
-    const instance = options.instance ?? await pickInstance(manifest.descriptor);
+    const instance = options.instance ?? await pickInstance(manifest);
     if (!instance) {
       return;
     }
-    const record: GuestRecord = {
-      id: manifest.id,
-      name: manifest.name,
-      packageRoot: manifest.packageRoot,
-      entry: manifest.entry,
-      version: manifest.version,
-      instance: instanceAllowed(instance, manifest.descriptor),
-      descriptor: manifest.descriptor,
-      source: { kind: 'archive', url: archive.fsPath }
-    };
+    const record = recordOf(manifest, instance, { kind: 'archive', url: archive.fsPath });
     await board.guests.add(record);
     if (options.token) {
       await board.guestService.connect(record, options.token, options.login);
@@ -247,13 +256,12 @@ export async function updateIntegration(board: BoardContext): Promise<void> {
     if (manifest.id !== picked.guest.id) {
       throw new Error(`The package id changed from ${picked.guest.id} to ${manifest.id}; remove and reinstall it.`);
     }
-    const record: GuestRecord = {
-      ...picked.guest,
-      name: manifest.name,
-      entry: manifest.entry,
-      version: manifest.version,
-      descriptor: manifest.descriptor
-    };
+    if (manifest.role !== picked.guest.role) {
+      throw new Error('The package role changed; remove and reinstall it.');
+    }
+    const record: GuestRecord = manifest.role === 'tracker'
+      ? { ...picked.guest, role: 'tracker', name: manifest.name, entry: manifest.entry, version: manifest.version, tracker: manifest.tracker }
+      : { ...picked.guest, role: 'source-control', name: manifest.name, entry: manifest.entry, version: manifest.version, descriptor: manifest.descriptor };
     await board.guests.add(record);
     await board.guestService.stop(record.id);
     void vscode.window.showInformationMessage(`Git Studio: updated ${manifest.name} to ${manifest.version}.`);
@@ -279,8 +287,14 @@ export async function connectIntegration(board: BoardContext): Promise<void> {
     return;
   }
 
+  const label = picked.role === 'tracker' ? picked.tracker.label : picked.descriptor.label;
+  const tokenAuth = picked.role === 'tracker' ? picked.tracker.auth.token : picked.descriptor.token;
+  if (!tokenAuth) {
+    void vscode.window.showWarningMessage(`Git Studio: ${label} uses OAuth, which is not supported yet.`);
+    return;
+  }
   const token = await vscode.window.showInputBox({
-    title: `${picked.descriptor.label} token`,
+    title: `${label} token`,
     prompt: `Token for ${picked.instance}. Stored in VS Code SecretStorage.`,
     password: true,
     ignoreFocusOut: true
@@ -289,9 +303,9 @@ export async function connectIntegration(board: BoardContext): Promise<void> {
     return;
   }
   let login: string | undefined;
-  if (picked.descriptor.token.username) {
+  if (tokenAuth.username) {
     login = await vscode.window.showInputBox({
-      title: `${picked.descriptor.label} username`,
+      title: `${label} username`,
       prompt: 'The username sent with the token (HTTP Basic).',
       ignoreFocusOut: true
     });
@@ -302,7 +316,7 @@ export async function connectIntegration(board: BoardContext): Promise<void> {
 
   try {
     await board.guestService.connect(picked, token, login);
-    void vscode.window.showInformationMessage(`Git Studio: connected ${picked.descriptor.label}.`);
+    void vscode.window.showInformationMessage(`Git Studio: connected ${label}.`);
     await BoardPanel.refreshCurrent();
   } catch (error) {
     void vscode.window.showErrorMessage(`Git Studio: ${error instanceof Error ? error.message : String(error)}`);

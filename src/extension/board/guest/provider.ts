@@ -12,7 +12,7 @@ import type {
 } from '../../../shared/board';
 import { normalizeRemoteUrl } from '../../git/remote';
 import type { BoardProvider } from '../github';
-import type { GuestRecord } from './store';
+import type { SourceControlGuestRecord } from './store';
 import type { GuestService } from './service';
 
 interface ScUser {
@@ -129,7 +129,7 @@ function timeOf(value: string | undefined): string {
   return value ?? new Date(0).toISOString();
 }
 
-export function guestRepoFor(record: GuestRecord, remote: string | undefined): BoardRepoInfo | undefined {
+export function guestRepoFor(record: SourceControlGuestRecord, remote: string | undefined): BoardRepoInfo | undefined {
   if (!remote) {
     return undefined;
   }
@@ -165,7 +165,7 @@ export function guestRepoFor(record: GuestRecord, remote: string | undefined): B
   };
 }
 
-function kindsOf(record: GuestRecord): BoardKind[] {
+function kindsOf(record: SourceControlGuestRecord): BoardKind[] {
   const kinds: BoardKind[] = [];
   if (record.descriptor.capabilities.issues) {
     kinds.push('issue');
@@ -181,7 +181,7 @@ export class GuestProvider implements BoardProvider {
   readonly repo: BoardRepoInfo;
 
   constructor(
-    private readonly record: GuestRecord,
+    private readonly record: SourceControlGuestRecord,
     private readonly service: GuestService,
     repo: BoardRepoInfo
   ) {

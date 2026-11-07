@@ -109,7 +109,8 @@ branch are listed first inside each group, then the most recently updated ones.
 The board opens as an editor panel and reads the active repository's remote. GitHub is built in;
 other hosts come from OpenChamber source-control integration packages.
 
-- Tabs: issues, pull requests and, on GitHub, discussions.
+- Tabs: issues, pull requests and, on GitHub, discussions. Installed tracker packages add a
+  **Tracker** tab with their work items, states, labels, assignees and comments (read-only).
 - Search and open/closed/all filter, paged list, split preview.
 - GitHub writes: comment, close/reopen, merge/squash, open on GitHub, copy link.
 - An installed integration package runs unmodified: Git Studio parses its `openchamber` manifest,
@@ -122,8 +123,9 @@ Integration packages are installed from a folder, a Git URL or a `.zip` / `.vsix
 **Update Integration Extension…**, which pulls and reloads its manifest. When more than one provider matches a repository,
 the provider selector in the board header switches between them.
 The first version supports the `source-control` role's reads plus comment, state, merge, labels,
-reviewers and review writes when the manifest declares those capabilities. Tracker packages,
-chat-session actions and worktree creation are out of scope for this version.
+reviewers and review writes when the manifest declares those capabilities, and the `tracker` role's
+`items.list` / `items.get` reads. Tracker writes, chat-session actions and worktree creation are out of
+scope for this version.
 
 ## Settings
 

@@ -1,16 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
-import type { OpenChamberManifest, SourceControlContribution } from '@openchamber/sdk';
+import type { OpenChamberManifest, SourceControlContribution, TrackerContribution } from '@openchamber/sdk';
 
-export interface GuestManifest {
-  id: string;
-  name: string;
-  version: string;
-  packageRoot: string;
-  entry: string;
-  descriptor: SourceControlContribution;
-}
+export type GuestManifest =
+  | {
+      id: string;
+      name: string;
+      version: string;
+      packageRoot: string;
+      entry: string;
+      role: 'source-control';
+      descriptor: SourceControlContribution;
+    }
+  | {
+      id: string;
+      name: string;
+      version: string;
+      packageRoot: string;
+      entry: string;
+      role: 'tracker';
+      tracker: TrackerContribution;
+    };
 
 export async function readGuestManifest(packageRoot: string): Promise<GuestManifest> {
   const raw = await readFile(path.join(packageRoot, 'package.json'), 'utf8');
@@ -23,13 +34,15 @@ export async function readGuestManifest(packageRoot: string): Promise<GuestManif
 
 function manifestOf(manifest: OpenChamberManifest, version: string, packageRoot: string): GuestManifest {
   const service = manifest.contributes.service;
-  const descriptor = manifest.contributes.sourceControl;
   const panel = manifest.contributes.panel;
-  if (!service || !service.provides?.includes('source-control')) {
-    throw new Error('This package is not a source-control integration (service.provides must include "source-control").');
+  const provides = service?.provides ?? [];
+  const sourceControl = provides.includes('source-control');
+  const tracker = provides.includes('tracker');
+  if (!service || (!sourceControl && !tracker)) {
+    throw new Error('This package is not an OpenChamber integration (service.provides must include "source-control" or "tracker").');
   }
-  if (!descriptor) {
-    throw new Error('This package has no contributes.sourceControl descriptor.');
+  if (sourceControl && tracker) {
+    throw new Error('An integration cannot provide both source-control and tracker.');
   }
   if (!panel?.id || !panel.name) {
     throw new Error('This package has no panel id and name.');
@@ -38,12 +51,19 @@ function manifestOf(manifest: OpenChamberManifest, version: string, packageRoot:
   if (!entry.startsWith(path.resolve(packageRoot) + path.sep)) {
     throw new Error('service.entry must stay inside the package folder.');
   }
-  return {
-    id: panel.id,
-    name: panel.name,
-    version,
-    packageRoot,
-    entry,
-    descriptor
-  };
+  const base = { id: panel.id, name: panel.name, version, packageRoot, entry };
+
+  if (tracker) {
+    const descriptor = manifest.contributes.tracker;
+    if (!descriptor) {
+      throw new Error('This package has no contributes.tracker descriptor.');
+    }
+    return { ...base, role: 'tracker', tracker: descriptor };
+  }
+
+  const descriptor = manifest.contributes.sourceControl;
+  if (!descriptor) {
+    throw new Error('This package has no contributes.sourceControl descriptor.');
+  }
+  return { ...base, role: 'source-control', descriptor };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GuestRecord } from './store';
+import type { SourceControlGuestRecord } from './store';
 import type { BoardKind } from '../../../shared/board';
 import { GuestProvider } from './provider';
 
@@ -19,7 +19,7 @@ const record = {
       reviewModel: 'votes'
     }
   }
-} as unknown as GuestRecord;
+} as unknown as SourceControlGuestRecord;
 
 const repo = {
   root: '/tmp/repo',

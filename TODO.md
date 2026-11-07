@@ -35,7 +35,8 @@
 - [x] Guest Host 写操作：votes 评审模型
 - [ ] Guest Host 写操作：review threads
 - [ ] Board UI 与 OpenChamber 逐像素对齐
-- [ ] Tracker / Linear tab
+- [x] Tracker tab：guest tracker 的 items.list / items.get 只读视图
+- [ ] Tracker 写操作：状态更新、评论、容器/项目映射
 - [x] Git URL 安装与更新（folder 安装保留）
 - [x] zip / VSIX 安装
 - [x] 多个集成 provider 在 Board 头部切换
