@@ -81,6 +81,9 @@ export class HistoryPanel {
   private details = new Map<string, CommitDetail>();
   private readonly parentIndex = new Map<string, number>();
   private readonly actions: CommitActionRunner;
+  private repoSubscriptions: vscode.Disposable[] = [];
+  private repoRefreshTimer: NodeJS.Timeout | undefined;
+  private lastRefreshAt = 0;
 
   static async show(services: Services, options: ShowOptions = {}): Promise<HistoryPanel | undefined> {
     if (HistoryPanel.current && !options.repo) {
@@ -126,6 +129,7 @@ export class HistoryPanel {
     }
     this.pendingFocus = options.focus;
     this.actions = new CommitActionRunner(services, () => this.repo, () => this.refresh());
+    this.bindRepo();
 
     this.panel.webview.html = renderHtml(panel.webview, services.extensionUri);
     if (this.filePath) {
@@ -146,6 +150,7 @@ export class HistoryPanel {
     const repoChanged = handle.root !== this.repo.root;
     if (repoChanged) {
       this.repo = handle;
+      this.bindRepo();
       this.filters = emptyFilters(handle);
       this.filePath = undefined;
       this.refs = [];
@@ -549,6 +554,7 @@ export class HistoryPanel {
   }
 
   async refresh(): Promise<void> {
+    this.lastRefreshAt = Date.now();
     this.abort?.abort();
     this.token += 1;
     this.rows = [];
@@ -566,12 +572,41 @@ export class HistoryPanel {
     this.post({ type: 'focusCommit', hash });
   }
 
+  private bindRepo(): void {
+    for (const subscription of this.repoSubscriptions) {
+      subscription.dispose();
+    }
+    this.repoSubscriptions = [
+      this.repo.repo.onDidCommit(() => this.scheduleRepoRefresh()),
+      this.repo.repo.onDidCheckout(() => this.scheduleRepoRefresh())
+    ];
+  }
+
+  private scheduleRepoRefresh(): void {
+    if (!this.ready || Date.now() - this.lastRefreshAt < 1000) {
+      return;
+    }
+    if (this.repoRefreshTimer) {
+      clearTimeout(this.repoRefreshTimer);
+    }
+    this.repoRefreshTimer = setTimeout(() => {
+      this.repoRefreshTimer = undefined;
+      void this.refresh();
+    }, 400);
+  }
+
   private post(message: HostMessage): void {
     void this.panel.webview.postMessage(message);
   }
 
   private dispose(): void {
     this.abort?.abort();
+    if (this.repoRefreshTimer) {
+      clearTimeout(this.repoRefreshTimer);
+    }
+    for (const subscription of this.repoSubscriptions) {
+      subscription.dispose();
+    }
     for (const disposable of this.disposables) {
       disposable.dispose();
     }

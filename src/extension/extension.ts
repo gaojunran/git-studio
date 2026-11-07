@@ -95,6 +95,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await HistoryPanel.show(services, { focus: hash });
     }),
 
+    vscode.commands.registerCommand('gitStudio.goToCommit', async () => {
+      const input = await vscode.window.showInputBox({
+        prompt: 'Commit hash, branch or tag',
+        placeHolder: 'e.g. a1b2c3d or origin/main'
+      });
+      const revision = input?.trim();
+      if (!revision) {
+        return;
+      }
+
+      const handle = await repoService.pick(vscode.window.activeTextEditor?.document.uri);
+      if (!handle) {
+        void vscode.window.showWarningMessage('Git Studio: no Git repository found in this workspace.');
+        return;
+      }
+
+      try {
+        const full = (
+          await runner.run(['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`], handle.root)
+        ).trim();
+        await HistoryPanel.show(services, { repo: handle, focus: full });
+      } catch {
+        void vscode.window.showErrorMessage(`Git Studio: unknown revision "${revision}".`);
+      }
+    }),
+
     vscode.commands.registerCommand('gitStudio.refresh', async () => {
       await HistoryPanel.refreshCurrent();
     }),

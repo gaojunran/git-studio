@@ -31,6 +31,7 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Annotate File (Blame)` | Toggle full-file blame annotations. |
 | `Git Studio: Toggle File Annotate` | Toggle annotations for the active editor. |
 | `Git Studio: Open Commit in History` | Reveal a commit in the history panel. |
+| `Git Studio: Go to Commit…` | Jump to a hash, branch or tag. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
 
 ## Settings

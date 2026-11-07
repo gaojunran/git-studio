@@ -54,6 +54,11 @@
         "category": "Git Studio"
       },
       {
+        "command": "gitStudio.goToCommit",
+        "title": "Go to Commit…",
+        "category": "Git Studio"
+      },
+      {
         "command": "gitStudio.refresh",
         "title": "Refresh",
         "category": "Git Studio",

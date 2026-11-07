@@ -19,6 +19,8 @@ export interface GitRepositoryLike {
     readonly onDidChange: vscode.Event<void>;
   };
   status(): Promise<void>;
+  readonly onDidCommit: vscode.Event<void>;
+  readonly onDidCheckout: vscode.Event<void>;
   checkout(treeish: string): Promise<void>;
   createBranch(name: string, checkout: boolean, ref?: string): Promise<void>;
   generateRandomBranchName?(): Promise<string | undefined>;
