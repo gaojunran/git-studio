@@ -99,7 +99,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand('gitStudio.openBoard', async (arg?: unknown) => {
       const uri = uriFromArg(arg) ?? vscode.window.activeTextEditor?.document.uri;
-      await BoardPanel.show(services, context.secrets, board, { repo: uri ? repoService.forUri(uri) : undefined });
+      await BoardPanel.show(services, context.secrets, board, { uri });
     }),
 
     vscode.commands.registerCommand('gitStudio.boardInstallIntegration', async (arg?: { folder?: string; instance?: string; token?: string; login?: string }) => {

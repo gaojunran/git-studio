@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import type {
   BoardHostMessage,
   BoardKind,
@@ -13,19 +14,86 @@ import { GuestProvider, guestRepoFor } from './guest/provider';
 import type { BoardContext } from './service';
 import type { GuestRecord } from './guest/store';
 import { renderBoardHtml } from '../host/html';
-import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
 
 const TOKEN_KEY = 'gitStudio.board.githubToken';
 
+interface BoardRemote {
+  name: string;
+  fetchUrl?: string;
+  pushUrl?: string;
+}
+
+export interface BoardRepo {
+  root: string;
+  name: string;
+  remotes: BoardRemote[];
+}
+
 interface ShowOptions {
-  repo?: RepoHandle;
+  repo?: BoardRepo;
+  uri?: vscode.Uri;
+}
+
+async function gitTopLevel(services: Services, start: string): Promise<string | undefined> {
+  for (const candidate of [start, path.dirname(start)]) {
+    try {
+      const root = (await services.runner.run(['rev-parse', '--show-toplevel'], candidate)).trim();
+      if (root) {
+        return root;
+      }
+    } catch {
+      // Try the parent when the URI is a file rather than a directory.
+    }
+  }
+  return undefined;
+}
+
+async function readRemotes(services: Services, root: string): Promise<BoardRemote[]> {
+  let output: string;
+  try {
+    output = await services.runner.run(['remote', '-v'], root);
+  } catch {
+    return [];
+  }
+  const remotes = new Map<string, BoardRemote>();
+  for (const line of output.split('\n')) {
+    const match = /^(\S+)\s+(\S+)\s+\((fetch|push)\)$/.exec(line.trim());
+    if (!match) {
+      continue;
+    }
+    const [, name, url, kind] = match;
+    const remote = remotes.get(name) ?? { name };
+    if (kind === 'fetch') {
+      remote.fetchUrl = url;
+    } else {
+      remote.pushUrl = url;
+    }
+    remotes.set(name, remote);
+  }
+  return [...remotes.values()];
+}
+
+export async function resolveBoardRepo(services: Services, uri?: vscode.Uri): Promise<BoardRepo | undefined> {
+  const handle = uri ? services.repoService.forUri(uri) : undefined;
+  if (handle) {
+    return { root: handle.root, name: handle.name, remotes: handle.repo.state.remotes };
+  }
+  const start = uri?.fsPath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!start) {
+    return undefined;
+  }
+  const root = await gitTopLevel(services, start);
+  if (!root) {
+    return undefined;
+  }
+  return { root, name: path.basename(root), remotes: await readRemotes(services, root) };
 }
 
 export class BoardPanel {
   private static current: BoardPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
-  private repo: RepoHandle | undefined;
+  private repo: BoardRepo | undefined;
   private provider: BoardProvider | undefined;
   private repoInfo: BoardRepoInfo | null = null;
   private providers: BoardProviderInfo[] = [];
@@ -38,7 +106,7 @@ export class BoardPanel {
   private lastQuery: BoardListQuery | undefined;
 
   static async show(services: Services, secrets: vscode.SecretStorage, board: BoardContext, options: ShowOptions = {}): Promise<BoardPanel | undefined> {
-    const repo = options.repo ?? await services.repoService.pick();
+    const repo = options.repo ?? await resolveBoardRepo(services, options.uri ?? vscode.window.activeTextEditor?.document.uri);
     if (!repo) {
       void vscode.window.showWarningMessage('Git Studio: no Git repository is open.');
       return undefined;
@@ -100,7 +168,7 @@ export class BoardPanel {
     extensionUri: vscode.Uri,
     private readonly secrets: vscode.SecretStorage,
     private readonly board: BoardContext,
-    repo: RepoHandle,
+    repo: BoardRepo,
     private readonly panel: vscode.WebviewPanel
   ) {
     this.repo = repo;
@@ -192,7 +260,7 @@ export class BoardPanel {
   }
 
   private remoteUrl(): string | undefined {
-    return pickRemoteUrl(this.repo?.repo.state.remotes ?? []);
+    return pickRemoteUrl(this.repo?.remotes ?? []);
   }
 
   private async connectProvider(providerId: string): Promise<void> {

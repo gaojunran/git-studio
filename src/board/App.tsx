@@ -768,7 +768,13 @@ export function App() {
         if (message.requestId !== 0 && message.requestId !== listRequest.current) {
           return;
         }
-        setItems((current) => (message.requestId === 0 && message.result.page > 1 ? [...current, ...message.result.items] : message.result.items));
+        setItems((current) => {
+          if (message.requestId !== 0 || message.result.page <= 1) {
+            return message.result.items;
+          }
+          const seen = new Set(current.map((item) => `${item.kind}-${item.number}`));
+          return [...current, ...message.result.items.filter((item) => !seen.has(`${item.kind}-${item.number}`))];
+        });
         setHasMore(message.result.hasMore);
         setListLoading(false);
         setListError(undefined);

@@ -48,22 +48,49 @@ export interface RepoHandle {
 
 export class RepoService {
   private api: GitApiLike | undefined;
+  private extension: vscode.Extension<GitExtensionLike> | undefined;
   private repoListener: vscode.Disposable | undefined;
   private repoChangeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeRepositories = this.repoChangeEmitter.event;
 
   async initialize(): Promise<void> {
-    const extension = vscode.extensions.getExtension<GitExtensionLike>('vscode.git');
-    if (!extension) {
+    this.extension = vscode.extensions.getExtension<GitExtensionLike>('vscode.git');
+    if (!this.extension) {
       return;
     }
+    // Do not activate the built-in Git extension here. Activating it makes VS Code
+    // scan the whole repository, which on a huge repository freezes the window.
+    // Commands that need the API call ensureActive() first.
+    if (this.extension.isActive) {
+      this.attach(this.extension.exports);
+    }
+  }
 
+  async ensureActive(): Promise<boolean> {
+    if (this.api) {
+      return true;
+    }
+    if (!this.extension) {
+      this.extension = vscode.extensions.getExtension<GitExtensionLike>('vscode.git');
+    }
+    if (!this.extension) {
+      return false;
+    }
     try {
-      const exports = extension.isActive ? extension.exports : await extension.activate();
-      if (!exports?.enabled) {
-        return;
-      }
+      this.attach(await this.extension.activate());
+      return this.api !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  private attach(exports: GitExtensionLike | undefined): void {
+    if (!exports?.enabled) {
+      return;
+    }
+    try {
       this.api = exports.getAPI(1);
+      this.repoListener?.dispose();
       this.repoListener = this.api.onDidOpenRepository(() => this.repoChangeEmitter.fire());
     } catch {
       this.api = undefined;
@@ -106,6 +133,7 @@ export class RepoService {
   }
 
   async pick(uri?: vscode.Uri): Promise<RepoHandle | undefined> {
+    await this.ensureActive();
     const fromUri = uri ? this.forUri(uri) : undefined;
     if (fromUri) {
       return fromUri;

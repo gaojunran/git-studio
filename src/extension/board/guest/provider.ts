@@ -80,6 +80,19 @@ interface ScContext {
   issueComments?: ScComment[];
 }
 
+function avatarOf(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    // Guest services often return loopback media URLs. The board runs in a WebView
+    // that cannot reach them (and CSP blocks http), so fall back to initials.
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 function loginOf(user: ScUser | null | undefined): BoardItemSummary['author'] {
   if (!user) {
     return null;
@@ -88,7 +101,7 @@ function loginOf(user: ScUser | null | undefined): BoardItemSummary['author'] {
   if (!login) {
     return null;
   }
-  return { login, name: user.name ?? null, avatarUrl: user.avatarUrl ?? null };
+  return { login, name: user.name ?? null, avatarUrl: avatarOf(user.avatarUrl) };
 }
 
 function labelsOf(labels: ScLabel[] | undefined): BoardItemSummary['labels'] {

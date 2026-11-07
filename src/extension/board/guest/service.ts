@@ -69,6 +69,7 @@ function reservePort(): Promise<number> {
 
 export class GuestService {
   private readonly runtimes = new Map<string, Runtime>();
+  private readonly starting = new Map<string, Promise<Runtime>>();
   private readonly handles = new Map<string, OutboundHandle>();
   private callback: http.Server | undefined;
   private callbackUrl: string | undefined;
@@ -366,7 +367,20 @@ export class GuestService {
       await existing.ready;
       return existing;
     }
+    const starting = this.starting.get(record.id);
+    if (starting) {
+      return starting;
+    }
+    const task = this.start(record);
+    this.starting.set(record.id, task);
+    try {
+      return await task;
+    } finally {
+      this.starting.delete(record.id);
+    }
+  }
 
+  private async start(record: GuestRecord): Promise<Runtime> {
     const callbackUrl = await this.ensureCallback();
     const port = await reservePort();
     const token = randomBytes(24).toString('base64url');

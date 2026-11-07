@@ -109,6 +109,7 @@ export class AnnotateController implements vscode.Disposable {
       return;
     }
 
+    await this.services.repoService.ensureActive();
     const repo = this.services.repoService.forUri(document.uri);
     if (!repo) {
       this.hide(document.uri);
