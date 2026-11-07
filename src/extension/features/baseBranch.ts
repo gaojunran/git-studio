@@ -14,7 +14,7 @@ export interface BaseInference {
   contained: Set<string>;
 }
 
-const MAINLINE = /^(main|master|develop|dev|trunk|next|stable|release(\/.*)?)$/i;
+const MAINLINE = /^(main|master)$/i;
 const STALE_SECONDS = 90 * 24 * 60 * 60;
 const CACHE_TTL_MS = 10_000;
 
@@ -32,15 +32,9 @@ export function branchBaseName(ref: RefInfo): string {
 
 export function mainlineRank(ref: RefInfo): number {
   const base = branchBaseName(ref).toLowerCase();
-  const names = ['main', 'master', 'develop', 'dev', 'trunk', 'next', 'stable'];
+  const names = ['main', 'master'];
   const exact = names.indexOf(base);
-  if (exact !== -1) {
-    return exact;
-  }
-  if (base === 'release' || base.startsWith('release/')) {
-    return names.length;
-  }
-  return Number.MAX_SAFE_INTEGER;
+  return exact === -1 ? Number.MAX_SAFE_INTEGER : exact;
 }
 
 export function isMainline(ref: RefInfo): boolean {

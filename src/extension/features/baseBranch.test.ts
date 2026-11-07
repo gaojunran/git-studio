@@ -22,11 +22,12 @@ describe('branchBaseName', () => {
 });
 
 describe('isMainline', () => {
-  it('recognises common mainline names locally and remotely', () => {
+  it('recognises only main and master as name fallbacks', () => {
     expect(isMainline(ref('main'))).toBe(true);
-    expect(isMainline(ref('develop'))).toBe(true);
-    expect(isMainline(ref('release/1.2'))).toBe(true);
+    expect(isMainline(ref('master'))).toBe(true);
     expect(isMainline(ref('origin/master', 'remote'))).toBe(true);
+    expect(isMainline(ref('develop'))).toBe(false);
+    expect(isMainline(ref('release/1.2'))).toBe(false);
     expect(isMainline(ref('feature/login'))).toBe(false);
     expect(isMainline(ref('origin/feature/login', 'remote'))).toBe(false);
   });
@@ -37,14 +38,13 @@ describe('isMainline', () => {
 });
 
 describe('mainlineRank', () => {
-  it('orders main before master, develop and release', () => {
+  it('orders main before master', () => {
     expect(mainlineRank(ref('main'))).toBeLessThan(mainlineRank(ref('master')));
-    expect(mainlineRank(ref('master'))).toBeLessThan(mainlineRank(ref('develop')));
-    expect(mainlineRank(ref('develop'))).toBeLessThan(mainlineRank(ref('release/1.0')));
   });
 
   it('sorts non-mainlines last', () => {
-    expect(mainlineRank(ref('feature/x'))).toBeGreaterThan(mainlineRank(ref('release/9.9')));
+    expect(mainlineRank(ref('feature/x'))).toBeGreaterThan(mainlineRank(ref('master')));
+    expect(mainlineRank(ref('release/9.9'))).toBeGreaterThan(mainlineRank(ref('master')));
   });
 });
 
