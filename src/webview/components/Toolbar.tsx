@@ -31,13 +31,14 @@ export function Toolbar(props: Props) {
   const { repo, refs, filters } = props;
   const [expanded, setExpanded] = useState(false);
 
-  const selectedNames = filters.refs.length === 0
-    ? []
-    : refs.filter((ref) => filters.refs.includes(ref.name)).map((ref) => ref.shortName);
+  const selectedNames = filters.refs.map((name) =>
+    refs.find((ref) => ref.name === name)?.shortName ??
+    (name === 'HEAD' ? 'HEAD' : name.replace(/^refs\/(heads|remotes|tags)\//, ''))
+  );
   const refLabel = filters.refs.length === 0
     ? 'All refs'
-    : selectedNames.length === 1
-      ? selectedNames[0]
+    : selectedNames.length <= 3
+      ? selectedNames.join(', ')
       : `${filters.refs.length} refs`;
   const refTitle = filters.refs.length === 0
     ? 'Showing all refs — click to choose'
