@@ -4,6 +4,7 @@ import { loadWorktreeFiles } from '../git/diff';
 import type { Services } from '../host/services';
 import { emptyUri, gitUri } from '../host/uris';
 import { pickRef, shortRef } from './refPicker';
+import { currentBranchRef } from './currentRef';
 import { mergeBaseLabel, mergeBaseOf } from './mergeBase';
 
 export async function compareWorkingTree(services: Services, uri?: vscode.Uri, refOverride?: string): Promise<void> {
@@ -13,7 +14,11 @@ export async function compareWorkingTree(services: Services, uri?: vscode.Uri, r
     return;
   }
 
-  const ref = refOverride ?? await pickRef(services, repo, { placeHolder: 'Compare working tree with…' });
+  const ref = refOverride ?? await pickRef(services, repo, {
+    placeHolder: 'Compare working tree with…',
+    includeHead: true,
+    inference: { currentRef: (await currentBranchRef(services, repo)) ?? 'HEAD' }
+  });
   if (!ref) {
     return;
   }

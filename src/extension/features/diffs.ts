@@ -7,6 +7,7 @@ import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
 import { emptyUri, gitUri } from '../host/uris';
 import { pickRef, shortRef } from './refPicker';
+import { currentBranchRef, resolveCurrentRef } from './currentRef';
 import { mergeBaseLabel, mergeBaseOf } from './mergeBase';
 
 async function repoFor(services: Services, uri?: vscode.Uri): Promise<RepoHandle | undefined> {
@@ -74,56 +75,6 @@ export async function compareRefs(
   await openRefDiff(services, repo, left, right, `${shortRef(left)} ↔ ${shortRef(right)}`);
 }
 
-interface CurrentRef {
-  ref: string;
-  label: string;
-  detached: boolean;
-}
-
-async function resolveCurrentBranch(services: Services, repo: RepoHandle): Promise<CurrentRef | undefined> {
-  const name = (await services.runner
-    .run(['symbolic-ref', '--short', '-q', 'HEAD'], repo.root)
-    .catch(() => ''))
-    .trim();
-  if (name) {
-    return { ref: `refs/heads/${name}`, label: name, detached: false };
-  }
-
-  const shortHead = (await services.runner.run(['rev-parse', '--short', 'HEAD'], repo.root).catch(() => '')).trim() || 'HEAD';
-  const branches = (await services.runner
-    .run(['branch', '--contains', 'HEAD', '--format=%(refname:short)'], repo.root)
-    .catch(() => ''))
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('('));
-
-  if (branches.length === 1) {
-    return { ref: `refs/heads/${branches[0]}`, label: `${branches[0]} (detached)`, detached: true };
-  }
-
-  if (branches.length === 0) {
-    return { ref: 'HEAD', label: `HEAD (${shortHead})`, detached: true };
-  }
-
-  const picked = await vscode.window.showQuickPick(
-    [
-      { label: `Detached HEAD (${shortHead})`, description: 'compare the commit itself', value: 'HEAD' },
-      ...branches.map((branch) => ({
-        label: branch,
-        description: 'branch containing HEAD',
-        value: `refs/heads/${branch}`
-      }))
-    ],
-    { placeHolder: 'Detached HEAD — which branch represents the current state?' }
-  );
-  if (!picked) {
-    return undefined;
-  }
-  return picked.value === 'HEAD'
-    ? { ref: 'HEAD', label: `HEAD (${shortHead})`, detached: true }
-    : { ref: picked.value, label: `${shortRef(picked.value)} (detached)`, detached: true };
-}
-
 export async function compareRefsMergeBase(
   services: Services,
   uri?: vscode.Uri,
@@ -178,12 +129,17 @@ export async function compareMergeBase(
 
   const current = currentOverride
     ? { ref: currentOverride, label: shortRef(currentOverride), detached: currentOverride === 'HEAD' }
-    : await resolveCurrentBranch(services, repo);
+    : await resolveCurrentRef(services, repo);
   if (!current) {
     return;
   }
 
-  const ref = refOverride ?? await pickRef(services, repo, { placeHolder: `Compare ${current.label} against…` });
+  const ref = refOverride ?? await pickRef(services, repo, {
+    placeHolder: `Compare ${current.label} against…`,
+    includeHead: false,
+    excludeCurrent: true,
+    inference: { currentRef: current.ref }
+  });
   if (!ref) {
     return;
   }
@@ -344,7 +300,11 @@ export async function compareFolder(services: Services, uri?: vscode.Uri, refOve
     ? relative
     : path.posix.dirname(relative);
 
-  const ref = refOverride ?? await pickRef(services, repo, { placeHolder: 'Compare folder with working tree…' });
+  const ref = refOverride ?? await pickRef(services, repo, {
+    placeHolder: 'Compare folder with working tree…',
+    includeHead: true,
+    inference: { currentRef: (await currentBranchRef(services, repo)) ?? 'HEAD' }
+  });
   if (!ref) {
     return;
   }

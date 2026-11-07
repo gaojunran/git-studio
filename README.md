@@ -58,6 +58,22 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Compare Unpushed Commits…` | Diff `@{upstream}..HEAD` before pushing. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
 
+### Ref picker
+
+Every diff command picks refs through one grouped picker. For the two merge-base commands the first
+entry is an inferred base branch, not `HEAD`:
+
+1. `branch: Created from <ref>` in the branch reflog (strongest signal)
+2. a tracking upstream, unless it is the same-named remote branch
+3. the closest branch fully contained in the current branch (mainlines preferred)
+4. the closest mainline to the merge base (covers a base branch that has moved on)
+
+After the inferred base, all local and remote mainlines (`main`, `master`, `develop`, `dev`, `trunk`,
+`next`, `stable`, `release/*`, plus `origin/HEAD`) are listed when the inferred branch is not itself a
+mainline. `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would compare the
+branch with itself), while `Compare Working Tree with Merge Base` keeps `HEAD` after the mainlines
+because it means "only uncommitted changes".
+
 ## Settings
 
 | Setting | Default | Description |
