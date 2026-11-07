@@ -17,9 +17,9 @@ place to learn and one source of truth for repository state.
 - Open a commit as a native multi-file diff; compare any two commits.
 - File history with rename following (`git log --follow`), opened from Explorer, SCM or the editor.
 - Full-file blame annotations with configurable template and clickable commit links.
-- Compare the working tree with any branch, tag or commit (command palette, SCM title, Explorer
-  and editor context). The working-tree side of the diff is a real file URI, so it stays editable;
-  untracked files are included as additions.
+- Compare the working tree with any branch, tag or commit using three-dot semantics (merge base to
+  working tree), so commits unique to the other side never show up. The working-tree side of the diff
+  is a real file URI, so it stays editable; untracked files are included as additions.
 - More diff commands: two refs, merge-base, stash, one file at two revisions, a folder, and unpushed commits.
 - Detached HEAD (jj workflows) is handled: the merge-base command resolves the only branch containing
   HEAD, and asks when several branches match instead of failing.
@@ -46,12 +46,12 @@ place to learn and one source of truth for repository state.
 | `Git Studio: Open Commit in History` | Reveal a commit in the history panel. |
 | `Git Studio: Go to Commit…` | Jump to a hash, branch or tag. |
 | `Git Studio: Undo Last Rewrite` | Reset back to the state recorded before the last rewrite. |
-| `Git Studio: Compare Working Tree with…` | Pick a branch, tag or commit and open an editable multi-file diff. |
+| `Git Studio: Compare Working Tree with…` | Diff a ref against the working tree from their merge base (three-dot). The working-tree side stays editable. |
 | `Git Studio: Compare Two Refs…` | Diff any two branches, tags or commits. |
 | `Git Studio: Compare Current Branch with Merge Base…` | Show only the changes made on the current branch since it diverged. In detached HEAD it uses the only branch containing HEAD, otherwise asks which branch (or HEAD itself) to use. |
 | `Git Studio: Compare Stash…` | Diff a stash against its parent commit. |
 | `Git Studio: Compare File at Two Revisions…` | Diff one file between any two revisions. |
-| `Git Studio: Compare Folder with Working Tree…` | Diff a folder against a ref; the working-tree side stays editable. |
+| `Git Studio: Compare Folder with Working Tree…` | Diff a folder against a ref from their merge base; the working-tree side stays editable. |
 | `Git Studio: Compare Unpushed Commits…` | Diff `@{upstream}..HEAD` before pushing. |
 | `Git Studio: Refresh` | Refresh the open history panel. |
 

@@ -7,6 +7,7 @@ import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
 import { emptyUri, gitUri } from '../host/uris';
 import { pickRef, shortRef } from './refPicker';
+import { mergeBaseLabel, mergeBaseOf } from './mergeBase';
 
 async function repoFor(services: Services, uri?: vscode.Uri): Promise<RepoHandle | undefined> {
   const repo = await services.repoService.pick(uri ?? vscode.window.activeTextEditor?.document.uri);
@@ -150,10 +151,7 @@ export async function compareMergeBase(
     return;
   }
 
-  const base = await services.runner
-    .run(['merge-base', current.ref, ref], repo.root)
-    .then((output) => output.trim().split('\n')[0] ?? '')
-    .catch(() => '');
+  const base = await mergeBaseOf(services, repo, current.ref, ref);
   if (!base) {
     void vscode.window.showInformationMessage(
       `Git Studio: ${current.label} has no common ancestor with ${shortRef(ref)}.`
@@ -309,23 +307,29 @@ export async function compareFolder(services: Services, uri?: vscode.Uri, refOve
   if (!ref) {
     return;
   }
+  const base = await mergeBaseOf(services, repo, ref, 'HEAD');
+  if (!base) {
+    void vscode.window.showInformationMessage(`Git Studio: ${shortRef(ref)} has no common ancestor with HEAD.`);
+    return;
+  }
+  const scope = mergeBaseLabel(shortRef(ref));
 
-  const all = await loadWorktreeFiles(services.runner, repo.root, ref);
+  const all = await loadWorktreeFiles(services.runner, repo.root, base);
   const files = all.filter((file) => file.path.startsWith(`${prefix}/`) || file.oldPath?.startsWith(`${prefix}/`));
   if (files.length === 0) {
-    void vscode.window.showInformationMessage(`Git Studio: no changes under ${prefix} compared to ${shortRef(ref)}.`);
+    void vscode.window.showInformationMessage(`Git Studio: no changes under ${prefix} compared to ${scope}.`);
     return;
   }
 
   const entries: [vscode.Uri, vscode.Uri, vscode.Uri][] = files.map((file) => {
     const worktree = vscode.Uri.joinPath(repo.repo.rootUri, file.path);
     const oldPath = file.oldPath ?? file.path;
-    const left = file.status === 'A' ? emptyUri(oldPath) : gitUri(services, repo, oldPath, ref);
+    const left = file.status === 'A' ? emptyUri(oldPath) : gitUri(services, repo, oldPath, base);
     const right = file.status === 'D' ? emptyUri(file.path) : worktree;
     return [worktree, left, right];
   });
 
-  await vscode.commands.executeCommand('vscode.changes', `${prefix} ↔ ${shortRef(ref)}`, entries);
+  await vscode.commands.executeCommand('vscode.changes', `${prefix} ↔ ${scope}`, entries);
 }
 
 export async function compareUnpushed(services: Services, uri?: vscode.Uri): Promise<void> {
