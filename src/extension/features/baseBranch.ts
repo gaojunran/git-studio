@@ -59,9 +59,11 @@ export async function loadMainlines(services: Services, repo: RepoHandle, refs: 
     .map((line) => line.trim())
     .filter(Boolean);
 
-  return sortMainlines(
-    refs.filter((ref) => isMainline(ref) || defaultHeads.includes(ref.shortName))
-  );
+  if (defaultHeads.length > 0) {
+    return sortMainlines(refs.filter((ref) => defaultHeads.includes(ref.shortName)));
+  }
+
+  return sortMainlines(refs.filter((ref) => isMainline(ref)));
 }
 
 async function count(services: Services, repo: RepoHandle, range: string): Promise<number> {
@@ -196,7 +198,7 @@ async function computeInference(
         guess: guessOf(
           picked.ref,
           picked.overridden
-            ? `active mainline over stale ${match.shortName}`
+            ? 'active mainline'
             : `upstream of ${currentShort}`
         ),
         mainlines,
@@ -217,7 +219,7 @@ async function computeInference(
       return {
         guess: guessOf(
           picked.ref,
-          picked.overridden ? `active mainline over stale ${match.shortName}` : `created from ${created[1]}`
+          picked.overridden ? 'active mainline' : `created from ${created[1]}`
         ),
         mainlines,
         contained
@@ -235,7 +237,7 @@ async function computeInference(
       guess: guessOf(
         picked.ref,
         picked.overridden
-          ? `active mainline over stale ${containedMainline.shortName}`
+          ? 'active mainline'
           : 'active mainline contained in the current branch'
       ),
       mainlines,
