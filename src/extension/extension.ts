@@ -3,6 +3,14 @@ import { GitRunner } from './git/cli';
 import { WriteCoordinator } from './git/write';
 import { AnnotateController } from './features/annotate';
 import { compareWorkingTree } from './features/compare';
+import {
+  compareFileRevisions,
+  compareFolder,
+  compareMergeBase,
+  compareRefs,
+  compareStash,
+  compareUnpushed
+} from './features/diffs';
 import { HistoryPanel } from './host/historyPanel';
 import { Journal } from './host/journal';
 import { RepoService } from './host/repoService';
@@ -11,6 +19,28 @@ import type { Services } from './host/services';
 interface ScmResourceArg {
   resourceUri?: vscode.Uri;
   resource?: { resourceUri?: vscode.Uri };
+}
+
+interface CompareArg {
+  uri?: vscode.Uri;
+  left?: string;
+  right?: string;
+  ref?: string;
+  stash?: string;
+}
+
+function splitCompareArg(arg: unknown): { uri?: vscode.Uri; options: CompareArg } {
+  if (arg instanceof vscode.Uri) {
+    return { uri: arg, options: {} };
+  }
+  if (typeof arg === 'string') {
+    return { uri: undefined, options: { ref: arg } };
+  }
+  if (arg && typeof arg === 'object') {
+    const options = arg as CompareArg;
+    return { uri: options.uri ?? uriFromArg(arg), options };
+  }
+  return { uri: undefined, options: {} };
 }
 
 function uriFromArg(arg: unknown): vscode.Uri | undefined {
@@ -129,12 +159,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('gitStudio.compareWorkingTree', async (arg?: unknown) => {
-      const objectArg = arg && typeof arg === 'object' && !(arg instanceof vscode.Uri)
-        ? arg as { uri?: vscode.Uri; ref?: string }
-        : undefined;
-      const uri = arg instanceof vscode.Uri ? arg : objectArg?.uri ?? uriFromArg(arg);
-      const ref = typeof arg === 'string' ? arg : objectArg?.ref;
-      await compareWorkingTree(services, uri, ref);
+      const { uri, options } = splitCompareArg(arg);
+      await compareWorkingTree(services, uri, options.ref);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffRefs', async (arg?: unknown) => {
+      const { uri, options } = splitCompareArg(arg);
+      await compareRefs(services, uri, options.left, options.right);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffMergeBase', async (arg?: unknown) => {
+      const { uri, options } = splitCompareArg(arg);
+      await compareMergeBase(services, uri, options.ref);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffStash', async (arg?: unknown) => {
+      const { uri, options } = splitCompareArg(arg);
+      await compareStash(services, uri, options.stash);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffFileRevisions', async (arg?: unknown) => {
+      const { uri, options } = splitCompareArg(arg);
+      await compareFileRevisions(services, uri, options.left, options.right);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffFolder', async (arg?: unknown) => {
+      const { uri, options } = splitCompareArg(arg);
+      await compareFolder(services, uri, options.ref);
+    }),
+
+    vscode.commands.registerCommand('gitStudio.diffUnpushed', async (arg?: unknown) => {
+      const { uri } = splitCompareArg(arg);
+      await compareUnpushed(services, uri);
     }),
 
     vscode.commands.registerCommand('gitStudio.undoLastRewrite', async () => {

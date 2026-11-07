@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -69,6 +69,42 @@
         "category": "Git Studio"
       },
       {
+        "command": "gitStudio.diffRefs",
+        "title": "Compare Two Refs…",
+        "category": "Git Studio",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitStudio.diffMergeBase",
+        "title": "Compare Current Branch with Merge Base…",
+        "category": "Git Studio",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitStudio.diffStash",
+        "title": "Compare Stash…",
+        "category": "Git Studio",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "gitStudio.diffFileRevisions",
+        "title": "Compare File at Two Revisions…",
+        "category": "Git Studio",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "gitStudio.diffFolder",
+        "title": "Compare Folder with Working Tree…",
+        "category": "Git Studio",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "gitStudio.diffUnpushed",
+        "title": "Compare Unpushed Commits…",
+        "category": "Git Studio",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "gitStudio.refresh",
         "title": "Refresh",
         "category": "Git Studio",
@@ -86,6 +122,26 @@
           "command": "gitStudio.compareWorkingTree",
           "when": "scmProvider == git",
           "group": "navigation@11"
+        },
+        {
+          "command": "gitStudio.diffUnpushed",
+          "when": "scmProvider == git",
+          "group": "1_compare@1"
+        },
+        {
+          "command": "gitStudio.diffStash",
+          "when": "scmProvider == git",
+          "group": "1_compare@2"
+        },
+        {
+          "command": "gitStudio.diffRefs",
+          "when": "scmProvider == git",
+          "group": "1_compare@3"
+        },
+        {
+          "command": "gitStudio.diffMergeBase",
+          "when": "scmProvider == git",
+          "group": "1_compare@4"
         }
       ],
       "scm/resourceState/context": [
@@ -110,6 +166,16 @@
           "command": "gitStudio.compareWorkingTree",
           "when": "!explorerResourceIsFolder && resourceScheme == file",
           "group": "9_git@2"
+        },
+        {
+          "command": "gitStudio.diffFileRevisions",
+          "when": "!explorerResourceIsFolder && resourceScheme == file",
+          "group": "9_git@3"
+        },
+        {
+          "command": "gitStudio.diffFolder",
+          "when": "explorerResourceIsFolder && resourceScheme == file",
+          "group": "9_git@1"
         }
       ],
       "editor/context": [
@@ -127,6 +193,11 @@
           "command": "gitStudio.compareWorkingTree",
           "when": "resourceScheme == file",
           "group": "9_git@3"
+        },
+        {
+          "command": "gitStudio.diffFileRevisions",
+          "when": "resourceScheme == file",
+          "group": "9_git@4"
         }
       ]
     },
