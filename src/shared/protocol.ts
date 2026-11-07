@@ -9,6 +9,8 @@ export interface RefInfo {
   shortName: string;
   type: RefType;
   oid: string;
+  /** Unix seconds of the last commit on the ref. */
+  committerDate: number;
   upstream?: string;
   current: boolean;
 }

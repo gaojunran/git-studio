@@ -132,6 +132,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (event.affectsConfiguration('gitStudio.annotate')) {
         void annotate.refreshActive();
       }
+      if (event.affectsConfiguration('gitStudio.history')) {
+        void HistoryPanel.refreshCurrent();
+      }
     })
   );
 }

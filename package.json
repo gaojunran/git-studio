@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -125,11 +125,27 @@
         "gitStudio.history.defaultRefs": {
           "type": "string",
           "enum": [
-            "all",
-            "current"
+            "primary",
+            "current",
+            "all"
           ],
-          "default": "all",
-          "description": "Refs selected when the history panel opens."
+          "default": "primary",
+          "markdownDescription": "Refs shown when the history panel opens. `primary` = current branch, its upstream, main/master/develop, recently updated local branches and pinned refs. `current` = current branch only. `all` = every ref (can produce a very wide graph)."
+        },
+        "gitStudio.history.recentRefLimit": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 30,
+          "description": "How many recently updated local branches to add in primary mode (0 = only primary branches, upstream and pinned refs)."
+        },
+        "gitStudio.history.pinnedRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Ref names or glob patterns that are always included, e.g. `release/*` or `origin/main`."
         },
         "gitStudio.history.order": {
           "type": "string",

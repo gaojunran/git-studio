@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { CommitRow, GraphRow } from '../../shared/protocol';
 import { GraphOverlay } from './GraphOverlay';
 import { relativeDate } from '../format';
@@ -8,7 +8,6 @@ const ROW_HEIGHT = 26;
 interface Props {
   rows: CommitRow[];
   graph: GraphRow[];
-  graphWidth: number;
   hasMore: boolean;
   loading: boolean;
   selected: string | null;
@@ -44,7 +43,19 @@ function refBadges(refs: string[]): RefBadge[] {
 }
 
 export function CommitList(props: Props) {
-  const { rows, graph, graphWidth, hasMore, loading, selected, compare } = props;
+  const { rows, graph, hasMore, loading, selected, compare } = props;
+  const maxLane = useMemo(() => {
+    let max = 0;
+    for (const row of graph) {
+      max = Math.max(max, row.lane);
+      for (const segment of row.segments) {
+        max = Math.max(max, segment.from, segment.to);
+      }
+    }
+    return max;
+  }, [graph]);
+  const laneGap = maxLane > 14 ? 9 : maxLane > 8 ? 11 : 14;
+  const graphWidth = 10 + maxLane * laneGap + 14;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
@@ -194,6 +205,7 @@ export function CommitList(props: Props) {
             endIndex={end}
             rowHeight={ROW_HEIGHT}
             width={graphWidth}
+            laneGap={laneGap}
             selectedHash={selected}
           />
         )}

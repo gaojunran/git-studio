@@ -359,6 +359,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
 }
 
 .row__subject {
@@ -373,7 +374,7 @@ select.input {
   display: flex;
   gap: 3px;
   flex: none;
-  max-width: 300px;
+  max-width: 240px;
   overflow: hidden;
 }
 

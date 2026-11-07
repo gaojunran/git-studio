@@ -31,11 +31,17 @@ export function Toolbar(props: Props) {
   const { repo, refs, filters } = props;
   const [expanded, setExpanded] = useState(false);
 
+  const selectedNames = filters.refs.length === 0
+    ? []
+    : refs.filter((ref) => filters.refs.includes(ref.name)).map((ref) => ref.shortName);
   const refLabel = filters.refs.length === 0
     ? 'All refs'
-    : filters.refs.length === 1
-      ? refs.find((ref) => ref.name === filters.refs[0])?.shortName ?? '1 ref'
+    : selectedNames.length === 1
+      ? selectedNames[0]
       : `${filters.refs.length} refs`;
+  const refTitle = filters.refs.length === 0
+    ? 'Showing all refs — click to choose'
+    : `Showing: ${selectedNames.slice(0, 20).join(', ')}${selectedNames.length > 20 ? ` +${selectedNames.length - 20}` : ''}`;
 
   return (
     <div className="toolbar">
@@ -45,7 +51,7 @@ export function Toolbar(props: Props) {
           {repo.detached ? <span className="muted">detached</span> : repo.branch ? <span className="muted">{repo.branch}</span> : null}
         </button>
 
-        <button className="btn" onClick={props.onPickRefs} title="Filter by branches and tags">
+        <button className="btn" onClick={props.onPickRefs} title={refTitle}>
           {refLabel}
         </button>
 

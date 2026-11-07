@@ -39,7 +39,9 @@ place to learn and one source of truth for repository state.
 | Setting | Default | Description |
 | --- | --- | --- |
 | `gitStudio.history.pageSize` | `500` | Commits loaded per page. |
-| `gitStudio.history.defaultRefs` | `all` | `all` or `current` when the panel opens. |
+| `gitStudio.history.defaultRefs` | `primary` | `primary` = current branch, its upstream, main/master/develop and pinned refs. `current` = current branch only. `all` = every ref. |
+| `gitStudio.history.recentRefLimit` | `0` | Extra recently updated local branches to add in `primary` mode. |
+| `gitStudio.history.pinnedRefs` | `[]` | Ref names or globs always included, e.g. `release/*`, `origin/main`. |
 | `gitStudio.history.order` | `date` | `date` or `topo` ordering. |
 | `gitStudio.annotate.enabled` | `false` | Enable blame annotations globally. |
 | `gitStudio.annotate.template` | `${authorName} · ${authorDateAgo} · ${summary}` | Annotation text. |
@@ -75,11 +77,22 @@ src/webview/               React history UI (virtual list + SVG graph)
 - The webview stores only filters, selection and scroll anchor in `setState`; commit
   data is re-requested when the panel becomes visible.
 
+## Complex histories
+
+The graph is only as wide as the refs you ask for. The default `primary` mode shows the
+current branch, its upstream, `main`/`master`/`develop` and anything in
+`gitStudio.history.pinnedRefs`. On repositories with hundreds of branches this keeps the
+graph at a handful of lanes instead of dozens.
+
+- Add a branch family: `"gitStudio.history.pinnedRefs": ["release/*", "origin/main"]`.
+- Add the N most recently updated local branches: `"gitStudio.history.recentRefLimit": 4`.
+- Pick arbitrary refs per session with the refs button in the toolbar.
+- `"gitStudio.history.defaultRefs": "all"` restores the full topology (and the full width).
+
 ## Limitations
 
 - No reset, revert, cherry-pick or interactive rebase yet.
 - Merge commit file lists use the selected parent's diff; rename detection is on.
-- `--all` is the default ref set; repositories with hundreds of refs can take longer on
-  a cold disk cache. Switch `gitStudio.history.defaultRefs` to `current` if needed.
+- `all` mode can be slow and wide on repositories with hundreds of refs; `primary` is the default for that reason.
 - The built-in Git extension must be enabled for repository discovery.
 - "Open on Remote" supports github.com, gitlab.com (and GitLab-like hosts) and bitbucket.org.

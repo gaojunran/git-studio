@@ -14,6 +14,7 @@ import { loadCommitDetail } from '../git/commit';
 import { loadDiffFiles } from '../git/diff';
 import { loadCommits, type LogQuery } from '../git/log';
 import { loadRefs } from '../git/refs';
+import { selectDefaultRefs, type DefaultRefMode } from '../history/defaultRefs';
 import { layoutGraph } from '../graph/layout';
 import { CommitActionRunner } from './actions';
 import { renderHtml } from './html';
@@ -29,13 +30,9 @@ interface ShowOptions {
   focus?: string;
 }
 
-function emptyFilters(repo: RepoHandle): Filters {
-  const configuration = vscode.workspace.getConfiguration('gitStudio');
-  const allRefs = configuration.get<string>('history.defaultRefs', 'all') !== 'current';
-  const branch = repo.repo.state.HEAD?.name;
-
+function emptyFilters(): Filters {
   return {
-    refs: allRefs || !branch ? [] : [`refs/heads/${branch}`],
+    refs: [],
     path: '',
     author: '',
     message: '',
@@ -45,7 +42,7 @@ function emptyFilters(repo: RepoHandle): Filters {
     noMerges: false,
     since: '',
     until: '',
-    order: configuration.get<'date' | 'topo'>('history.order', 'date')
+    order: vscode.workspace.getConfiguration('gitStudio').get<'date' | 'topo'>('history.order', 'date')
   };
 }
 
@@ -61,6 +58,14 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function sameRefSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  const set = new Set(a);
+  return b.every((ref) => set.has(ref));
+}
+
 export class HistoryPanel {
   private static current: HistoryPanel | undefined;
 
@@ -74,6 +79,8 @@ export class HistoryPanel {
   private hasMore = true;
   private refSignature = '';
   private lastRefsAt = 0;
+  private refsInitialized = false;
+  private refsSource: 'default' | 'custom' | 'all' = 'default';
   private token = 0;
   private abort: AbortController | undefined;
   private ready = false;
@@ -122,7 +129,7 @@ export class HistoryPanel {
     options: ShowOptions
   ) {
     this.repo = repo;
-    this.filters = emptyFilters(repo);
+    this.filters = emptyFilters();
     this.filePath = options.fileUri ? services.repoService.relativePath(repo, options.fileUri) : undefined;
     if (this.filePath) {
       this.filters.path = this.filePath;
@@ -151,7 +158,9 @@ export class HistoryPanel {
     if (repoChanged) {
       this.repo = handle;
       this.bindRepo();
-      this.filters = emptyFilters(handle);
+      this.filters = emptyFilters();
+      this.refsInitialized = false;
+      this.refsSource = 'default';
       this.filePath = undefined;
       this.refs = [];
       this.rows = [];
@@ -167,8 +176,10 @@ export class HistoryPanel {
       if (relative) {
         this.filePath = relative;
         this.filters = {
-          ...emptyFilters(this.repo),
-          path: relative
+          ...this.filters,
+          path: relative,
+          message: '',
+          author: ''
         };
         this.refSignature = '';
         this.panel.title = `History: ${path.basename(relative)}`;
@@ -257,6 +268,13 @@ export class HistoryPanel {
     }
 
     const pageSize = vscode.workspace.getConfiguration('gitStudio').get<number>('history.pageSize', PAGE_SIZE);
+    if (!this.refsInitialized || this.refsSource === 'default') {
+      this.filters.refs = this.defaultRefs();
+      this.refsInitialized = true;
+      this.refsSource = 'default';
+    } else if (this.refsSource === 'all') {
+      this.filters.refs = [];
+    }
     this.post({
       type: 'init',
       state: {
@@ -279,6 +297,15 @@ export class HistoryPanel {
       this.graph = [];
       this.hasMore = true;
       this.filters = { ...message.filters };
+      const defaults = this.defaultRefs();
+      if (this.filters.refs.length === 0) {
+        this.refsSource = 'all';
+      } else if (sameRefSet(this.filters.refs, defaults)) {
+        this.refsSource = 'default';
+      } else {
+        this.refsSource = 'custom';
+      }
+      this.refsInitialized = true;
       if (this.filePath && this.filters.path !== this.filePath) {
         this.filePath = undefined;
       }
@@ -488,8 +515,10 @@ export class HistoryPanel {
   private openFileHistory(filePath: string): void {
     this.filePath = filePath;
     this.filters = {
-      ...emptyFilters(this.repo),
-      path: filePath
+      ...this.filters,
+      path: filePath,
+      message: '',
+      author: ''
     };
     this.refSignature = '';
     this.rows = [];
@@ -505,27 +534,83 @@ export class HistoryPanel {
   }
 
   private async pickRefs(): Promise<void> {
-    const items: (vscode.QuickPickItem & { value: string })[] = [
-      { label: '$(globe) All refs', value: '', description: 'No ref filter' },
-      ...this.refs.map((ref) => ({
-        label: ref.shortName,
-        description: ref.type === 'tag' ? 'tag' : ref.type === 'remote' ? 'remote' : 'branch',
-        detail: ref.oid.slice(0, 8),
-        picked: this.filters.refs.includes(ref.name),
-        value: ref.name
-      }))
+    try {
+      this.refs = await loadRefs(this.services.runner, this.repo.root);
+      this.lastRefsAt = Date.now();
+    } catch (error) {
+      this.services.output.warn(`failed to refresh refs: ${errorText(error)}`);
+    }
+
+    const defaults = this.defaultRefs();
+    const isDefault = sameRefSet(this.filters.refs, defaults);
+
+    const refItem = (ref: RefInfo) => ({
+      label: ref.shortName,
+      description: ref.current ? 'current' : ref.type === 'tag' ? 'tag' : ref.type === 'remote' ? 'remote' : 'branch',
+      detail: ref.oid.slice(0, 8),
+      picked: this.filters.refs.includes(ref.name),
+      value: ref.name
+    });
+
+    const locals = this.refs.filter((ref) => ref.type === 'local' || ref.type === 'head');
+    const remotes = this.refs.filter((ref) => ref.type === 'remote');
+    const tags = this.refs.filter((ref) => ref.type === 'tag');
+
+    const items: (vscode.QuickPickItem & { value?: string })[] = [
+      {
+        label: '$(list-unordered) Default refs',
+        description: `${defaults.length} refs`,
+        picked: isDefault,
+        value: '__default__'
+      },
+      {
+        label: '$(globe) All refs',
+        description: 'Every branch, remote and tag',
+        picked: this.filters.refs.length === 0,
+        value: '__all__'
+      }
     ];
+
+    const addGroup = (label: string, group: RefInfo[]) => {
+      if (group.length === 0) {
+        return;
+      }
+      items.push({ label, kind: vscode.QuickPickItemKind.Separator });
+      items.push(...group.map(refItem));
+    };
+
+    addGroup('Local branches', locals);
+    addGroup('Remote branches', remotes);
+    addGroup('Tags', tags);
 
     const picked = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      placeHolder: 'Filter by refs (none selected = all refs)'
+      matchOnDescription: true,
+      placeHolder: 'Refs included in the graph (Default refs or All refs override individual picks)'
     });
     if (!picked) {
       return;
     }
 
-    const values = picked.map((item) => item.value).filter(Boolean);
-    this.filters = { ...this.filters, refs: values };
+    const values = picked
+      .map((item) => item.value)
+      .filter((value): value is string => Boolean(value));
+
+    let refs: string[];
+    const specifics = values.filter((value) => !value.startsWith('__'));
+    if (values.includes('__all__')) {
+      refs = [];
+    } else if (specifics.length > 0) {
+      refs = specifics;
+    } else if (values.includes('__default__')) {
+      refs = defaults;
+    } else {
+      refs = [];
+    }
+
+    this.filters = { ...this.filters, refs };
+    this.refsInitialized = true;
+    this.refsSource = refs.length === 0 ? 'all' : sameRefSet(refs, defaults) ? 'default' : 'custom';
     this.refSignature = '';
     this.post({ type: 'filters', filters: this.filters });
   }
@@ -536,7 +621,9 @@ export class HistoryPanel {
       return;
     }
     this.repo = handle;
-    this.filters = emptyFilters(handle);
+    this.filters = emptyFilters();
+    this.refsInitialized = false;
+    this.refsSource = 'default';
     this.filePath = undefined;
     this.rows = [];
     this.graph = [];
@@ -570,6 +657,15 @@ export class HistoryPanel {
 
   private focus(hash: string): void {
     this.post({ type: 'focusCommit', hash });
+  }
+
+  private defaultRefs(): string[] {
+    const configuration = vscode.workspace.getConfiguration('gitStudio');
+    return selectDefaultRefs(this.refs, {
+      mode: configuration.get<DefaultRefMode>('history.defaultRefs', 'primary'),
+      recentLimit: configuration.get<number>('history.recentRefLimit', 4),
+      pinned: configuration.get<string[]>('history.pinnedRefs', [])
+    });
   }
 
   private bindRepo(): void {

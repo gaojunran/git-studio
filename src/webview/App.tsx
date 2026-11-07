@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   CommitDetail,
   CommitRow,
@@ -215,17 +215,6 @@ export function App() {
     });
   };
 
-  const graphWidth = useMemo(() => {
-    let maxLane = 0;
-    for (const row of graph) {
-      maxLane = Math.max(maxLane, row.lane);
-      for (const segment of row.segments) {
-        maxLane = Math.max(maxLane, segment.from, segment.to);
-      }
-    }
-    return 14 + maxLane * 14 + 14;
-  }, [graph]);
-
   if (!init || !filters) {
     return <div className="loading-screen">Loading history…</div>;
   }
@@ -268,7 +257,6 @@ export function App() {
         <CommitList
           rows={rows}
           graph={graph}
-          graphWidth={graphWidth}
           hasMore={hasMore}
           loading={busy}
           selected={selected}

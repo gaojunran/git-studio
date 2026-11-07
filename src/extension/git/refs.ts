@@ -16,7 +16,7 @@ export function parseRefs(stdout: string): RefInfo[] {
     if (!record) {
       continue;
     }
-    const [name = '', oid = '', upstream = '', head = ''] = record.split(FIELD);
+    const [name = '', oid = '', upstream = '', head = '', committerDate = '0'] = record.split(FIELD);
     if (!name || !oid) {
       continue;
     }
@@ -44,6 +44,7 @@ export function parseRefs(stdout: string): RefInfo[] {
       shortName,
       type: head === '*' ? 'head' : type,
       oid,
+      committerDate: Number(committerDate) || 0,
       upstream: upstream || undefined,
       current: head === '*'
     });
@@ -66,7 +67,7 @@ export async function loadRefs(
   const stdout = await runner.run(
     [
       'for-each-ref',
-      `--format=%(refname)${FIELD}%(objectname)${FIELD}%(upstream:short)${FIELD}%(HEAD)${RECORD}`,
+      `--format=%(refname)${FIELD}%(objectname)${FIELD}%(upstream:short)${FIELD}%(HEAD)${FIELD}%(committerdate:unix)${RECORD}`,
       'refs/heads',
       'refs/remotes',
       'refs/tags'

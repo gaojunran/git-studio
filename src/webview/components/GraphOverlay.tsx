@@ -24,16 +24,17 @@ interface Props {
   endIndex: number;
   rowHeight: number;
   width: number;
+  laneGap: number;
   selectedHash: string | null;
   rows: { hash: string }[];
 }
 
-function laneX(lane: number): number {
-  return 10 + lane * 14;
+function laneX(lane: number, gap: number): number {
+  return 10 + lane * gap;
 }
 
 export function GraphOverlay(props: Props) {
-  const { graph, startIndex, endIndex, rowHeight, width, selectedHash, rows } = props;
+  const { graph, startIndex, endIndex, rowHeight, width, laneGap, selectedHash, rows } = props;
   const height = Math.max(0, endIndex - startIndex) * rowHeight;
   const nodes: ReactNode[] = [];
   const paths: ReactNode[] = [];
@@ -46,11 +47,11 @@ export function GraphOverlay(props: Props) {
     }
 
     const centerY = (index - startIndex) * rowHeight + rowHeight / 2;
-    const x = laneX(row.lane);
+    const x = laneX(row.lane, laneGap);
 
     for (const segment of row.segments) {
-      const x0 = laneX(segment.from);
-      const x1 = laneX(segment.to);
+      const x0 = laneX(segment.from, laneGap);
+      const x1 = laneX(segment.to, laneGap);
       const y0 = centerY;
       const y1 = centerY + rowHeight;
       const path = segment.from === segment.to
