@@ -67,11 +67,18 @@ entry is an inferred base branch, not `HEAD`. Inference and mainlines are indepe
 
 1. a tracking upstream, unless it is the same-named remote branch
 2. `branch: Created from <ref>` in the branch reflog
-3. the closest branch whose tip is already contained in the current branch
-4. the most recent branch that still shares history with the current branch
+3. otherwise, the closest fork point among the 20 most recently updated branches:
+   ```bash
+   git rev-list --count --left-right HEAD...<candidate>
+   ```
+   The left count is how many commits the current branch has since the fork point. Candidates are
+   ranked by that count ascending, then by the candidate's last commit descending, then by name.
+   The right count (how far the candidate advanced) is informational only: a base branch is allowed
+   to move on, so it is never excluded or penalised for being ahead. A candidate at the exact same
+   commit is skipped, and a local branch strictly ahead of the current branch is treated as a child
+   branch rather than a base.
 
-It never consults the mainline list and never replaces a result because another branch looks more
-active.
+It never consults the mainline list.
 
 **Mainlines** are a separate display list: if any `refs/remotes/<remote>/HEAD` exists, it is exactly
 those remote default branches; otherwise it falls back to branches named `main` or `master`. They are

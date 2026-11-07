@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RefInfo } from '../../shared/protocol';
-import { branchBaseName, isMainline, mainlineRank, sortMainlines } from './baseBranch';
+import { branchBaseName, isMainline, mainlineRank, rankBaseCandidates, sortMainlines } from './baseBranch';
 
 function ref(shortName: string, type: RefInfo['type'] = 'local'): RefInfo {
   return {
@@ -53,5 +53,32 @@ describe('sortMainlines', () => {
     const main = { ...ref('main'), committerDate: 200 };
     const master = { ...ref('master'), committerDate: 100 };
     expect(sortMainlines([master, main]).map((entry) => entry.shortName)).toEqual(['main', 'master']);
+  });
+});
+
+describe('rankBaseCandidates', () => {
+  const stat = (shortName: string, currentAhead: number, candidateAhead: number, committerDate: number) => ({
+    ref: { ...ref(shortName), committerDate },
+    currentAhead,
+    candidateAhead
+  });
+
+  it('prefers the closest fork point and ignores how far the candidate advanced', () => {
+    const release = stat('release', 1, 7, 300);
+    const feature = stat('feature', 1, 0, 200);
+    const sibling = stat('sibling', 2, 0, 400);
+    expect(rankBaseCandidates([sibling, feature, release])[0]).toBe(release);
+  });
+
+  it('breaks a fork-point tie by the most recent commit', () => {
+    const release = stat('release', 1, 7, 300);
+    const feature = stat('feature', 1, 0, 200);
+    expect(rankBaseCandidates([feature, release])[0]).toBe(release);
+  });
+
+  it('breaks a full tie by name', () => {
+    const feature = stat('feat-ad', 1, 0, 200);
+    const version = stat('v3.17.5', 1, 0, 200);
+    expect(rankBaseCandidates([version, feature])[0]).toBe(feature);
   });
 });

@@ -13,6 +13,14 @@ export interface BaseInference {
   contained: Set<string>;
 }
 
+export interface BaseCandidateStat {
+  ref: RefInfo;
+  /** Commits on the current branch since the fork point. */
+  currentAhead: number;
+  /** Commits on the candidate branch since the fork point; informational only. */
+  candidateAhead: number;
+}
+
 const MAINLINE = /^(main|master)$/i;
 const CACHE_TTL_MS = 10_000;
 
@@ -68,11 +76,6 @@ export async function loadMainlines(services: Services, repo: RepoHandle, refs: 
   return sortMainlines(refs.filter((ref) => isMainline(ref)));
 }
 
-async function count(services: Services, repo: RepoHandle, range: string): Promise<number> {
-  const output = await services.runner.run(['rev-list', '--count', range], repo.root).catch(() => '0');
-  return Number(output.trim()) || 0;
-}
-
 function findRef(source: string, refs: RefInfo[], usable: RefInfo[]): RefInfo | undefined {
   const trimmed = source.trim();
   if (!trimmed || trimmed === 'HEAD') {
@@ -105,6 +108,16 @@ function guessOf(ref: RefInfo, reason: string): BaseGuess {
   return { ref: ref.name, label: ref.shortName, reason };
 }
 
+/** Closest fork point first, then the most recently updated branch, then name. */
+export function rankBaseCandidates(stats: BaseCandidateStat[]): BaseCandidateStat[] {
+  return [...stats].sort(
+    (a, b) =>
+      a.currentAhead - b.currentAhead ||
+      b.ref.committerDate - a.ref.committerDate ||
+      a.ref.shortName.localeCompare(b.ref.shortName)
+  );
+}
+
 const cache = new Map<string, { at: number; value: Promise<BaseInference> }>();
 
 export function inferBaseRef(
@@ -120,7 +133,7 @@ export function inferBaseRef(
     return hit.value;
   }
 
-  const value = computeInference(services, repo, refs, currentRef, currentOid).catch((error) => {
+  const value = computeInference(services, repo, refs, currentRef).catch((error) => {
     cache.delete(key);
     throw error;
   });
@@ -132,10 +145,8 @@ async function computeInference(
   services: Services,
   repo: RepoHandle,
   refs: RefInfo[],
-  currentRef: string,
-  currentOid: string
+  currentRef: string
 ): Promise<BaseInference> {
-  const byName = new Map(refs.map((ref) => [ref.name, ref]));
   const currentShort = currentRef.startsWith('refs/heads/')
     ? currentRef.slice('refs/heads/'.length)
     : undefined;
@@ -196,38 +207,42 @@ async function computeInference(
     }
   }
 
-  // 3. The closest branch whose tip is already contained in this branch.
-  const containedOthers = [...contained]
-    .map((name) => byName.get(name))
-    .filter((ref): ref is RefInfo => Boolean(ref))
-    .filter((ref) => ref.name !== currentRef && ref.oid !== currentOid)
-    .filter((ref) => usable.some((candidate) => candidate.name === ref.name))
+  // 3. No explicit signal: compare fork points instead of requiring containment,
+  // so a base branch that has moved on still participates.
+  const candidates = [...usable]
     .sort((a, b) => b.committerDate - a.committerDate)
-    .slice(0, 5);
+    .slice(0, 20);
 
-  if (containedOthers.length > 0) {
-    const scored = await Promise.all(
-      containedOthers.map(async (ref) => ({ ref, distance: await count(services, repo, `${ref.name}..${currentRef}`) }))
-    );
-    const best = scored
-      .filter((entry) => entry.distance > 0)
-      .sort((a, b) => a.distance - b.distance || b.ref.committerDate - a.ref.committerDate)[0];
-    if (best) {
-      return { guess: guessOf(best.ref, 'closest branch fully contained in the current branch'), contained };
-    }
-  }
+  const stats = (
+    await Promise.all(
+      candidates.map(async (ref) => {
+        const output = await services.runner
+          .run(['rev-list', '--count', '--left-right', `${currentRef}...${ref.name}`], repo.root)
+          .catch(() => '');
+        const [currentAhead, candidateAhead] = output
+          .trim()
+          .split(/\s+/)
+          .map((value) => Number(value));
+        if (!Number.isFinite(currentAhead) || !Number.isFinite(candidateAhead)) {
+          return undefined;
+        }
+        // Same commit: not a useful base, the diff would only be the working tree.
+        if (currentAhead === 0 && candidateAhead === 0) {
+          return undefined;
+        }
+        // A local branch strictly ahead of the current branch is most likely a child
+        // branch created from it, not its base. Remote branches may legitimately be ahead.
+        if (currentAhead === 0 && ref.type !== 'remote') {
+          return undefined;
+        }
+        return { ref, currentAhead, candidateAhead };
+      })
+    )
+  ).filter((entry): entry is BaseCandidateStat => entry !== undefined);
 
-  // 4. No contained branch: the most recent branch that still shares history.
-  const recent = [...usable]
-    .sort((a, b) => b.committerDate - a.committerDate)
-    .slice(0, 5);
-  for (const ref of recent) {
-    const base = await services.runner
-      .run(['merge-base', currentRef, ref.name], repo.root)
-      .catch(() => '');
-    if (base.trim()) {
-      return { guess: guessOf(ref, 'most recent branch sharing history'), contained };
-    }
+  const best = rankBaseCandidates(stats)[0];
+  if (best) {
+    return { guess: guessOf(best.ref, 'closest fork point'), contained };
   }
 
   return { contained };
