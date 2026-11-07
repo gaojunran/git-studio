@@ -61,22 +61,23 @@ place to learn and one source of truth for repository state.
 ### Ref picker
 
 Every diff command picks refs through one grouped picker. For the two merge-base commands the first
-entry is an inferred base branch, not `HEAD`:
+entry is an inferred base branch, not `HEAD`. Inference and mainlines are independent:
+
+**Inference** only looks at branch relationships:
 
 1. a tracking upstream, unless it is the same-named remote branch
 2. `branch: Created from <ref>` in the branch reflog
-3. the most recently active mainline already contained in the current branch
-4. the closest branch fully contained in the current branch
-5. the most active mainline that shares history with the branch
+3. the closest branch whose tip is already contained in the current branch
+4. the most recent branch that still shares history with the current branch
 
-Mainlines are ordered by their last commit. When a remote HEAD exists, any other `main`/`master`
-is treated as a stale copy and is not used for inference. Without a remote HEAD, an upstream or
-reflog mainline more than 90 days older than the newest mainline is replaced by the newer one.
+It never consults the mainline list and never replaces a result because another branch looks more
+active.
+
+**Mainlines** are a separate display list: if any `refs/remotes/<remote>/HEAD` exists, it is exactly
+those remote default branches; otherwise it falls back to branches named `main` or `master`. They are
+ordered by last commit.
 
 After the inferred base, the other mainlines are listed; the inferred one is excluded from that group.
-If any `refs/remotes/<remote>/HEAD` exists, the mainline list is exactly those remote default
-branches, because any other `main`/`master` is a stale copy. Only when no remote HEAD is available
-does the picker fall back to local and remote branches named `main` or `master`.
 `HEAD` is never offered by `Compare Current Branch with Merge Base` (it would compare the branch
 with itself), while `Compare Working Tree with Merge Base` keeps `HEAD` after the mainlines because
 it means "only uncommitted changes".

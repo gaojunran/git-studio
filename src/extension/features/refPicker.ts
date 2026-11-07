@@ -4,7 +4,7 @@ import { loadRefs } from '../git/refs';
 import { resolveCommit } from '../git/revision';
 import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
-import { inferBaseRef, type BaseInference } from './baseBranch';
+import { inferBaseRef, loadMainlines, type BaseInference } from './baseBranch';
 
 interface RefItem extends vscode.QuickPickItem {
   value?: string;
@@ -92,6 +92,7 @@ export async function pickRef(
   ];
   let refs: RefInfo[] | undefined;
   let inference: BaseInference | undefined;
+  let mainlines: RefInfo[] = [];
   let all = options.all ?? false;
 
   while (true) {
@@ -100,14 +101,19 @@ export async function pickRef(
     if (!refs) {
       try {
         refs = await loadRefs(services.runner, repo.root);
-        inference = options.inference ? await inferBaseRef(services, repo, refs, options.inference.currentRef) : undefined;
+        if (options.inference) {
+          [inference, mainlines] = await Promise.all([
+            inferBaseRef(services, repo, refs, options.inference.currentRef),
+            loadMainlines(services, repo, refs)
+          ]);
+        }
       } catch (error) {
         handle.update([{ label: '$(error) Failed to load refs', description: String(error) }], false);
         await handle.promise;
         return undefined;
       }
     }
-    handle.update(buildItems(refs, inference, options, all), false);
+    handle.update(buildItems(refs, inference, mainlines, options, all), false);
 
     const picked = await handle.promise;
     if (!picked?.value) {
@@ -143,6 +149,7 @@ export async function pickRef(
 function buildItems(
   refs: RefInfo[],
   inference: BaseInference | undefined,
+  mainlines: RefInfo[],
   options: PickRefOptions,
   all: boolean
 ): RefItem[] {
@@ -211,7 +218,7 @@ function buildItems(
       used.add(guess.ref);
     }
 
-    addGroup('Mainlines', inference.mainlines, 'mainline');
+    addGroup('Mainlines', mainlines, 'mainline');
 
     if (options.includeHead !== false) {
       items.push(headItem);
