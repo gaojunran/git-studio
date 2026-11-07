@@ -24,6 +24,15 @@
 
 按建议优先级排列。一次只做一个，做完再进入下一个。
 
+### 0. OpenChamber Issues / MR / Discussions Board 移植
+
+完整方案见 [`docs/openchamber-board-plan.md`](docs/openchamber-board-plan.md)。
+
+- [ ] Guest Host：零修改运行 OpenChamber source-control / tracker 插件
+- [ ] Board UI：vendor `sourceBoard` / `references` / UI primitives + compat 层
+- [ ] 读写动作、mutation 幂等、discussion、tracker tab
+- [ ] 内置 provider（建议先 GitHub）后置
+
 ### 1. Stash 工作台
 
 - [ ] History 面板增加 Stash 视图（或独立面板）：列表、message、时间、关联分支
