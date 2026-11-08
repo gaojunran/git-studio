@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.2
+
+- Split Git Studio's Source Control actions by semantics: Changes keeps the working-tree compare, and
+  the repository actions menu gains worktrees, stash, board, branch/remote comparisons, history, reflog
+  and ref-to-ref comparisons.
+- The native Graph title and history-item context menus are proposed VS Code APIs, so a third-party
+  extension cannot add buttons there without `enabledApiProposals` and `--enable-proposed-api`; graph
+  actions remain available from the repository menu, the History panel and the command palette.
+
 ## 0.22.1
 
 - Removed the Git Studio activity-bar sidebar and its `Focus Git Studio Sidebar` command; the built-in

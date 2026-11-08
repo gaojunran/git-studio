@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.22.1",
+  "version": "0.22.2",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -238,74 +238,9 @@
     "menus": {
       "scm/title": [
         {
-          "command": "gitStudio.openHistory",
-          "when": "scmProvider == git",
-          "group": "navigation@10"
-        },
-        {
-          "command": "gitStudio.worktreeWorkbench",
-          "when": "scmProvider == git",
-          "group": "navigation@6"
-        },
-        {
-          "command": "gitStudio.reflogWorkbench",
-          "when": "scmProvider == git",
-          "group": "navigation@7"
-        },
-        {
-          "command": "gitStudio.stashWorkbench",
-          "when": "scmProvider == git",
-          "group": "navigation@8"
-        },
-        {
-          "command": "gitStudio.openBoard",
-          "when": "scmProvider == git",
-          "group": "navigation@9"
-        },
-        {
           "command": "gitStudio.compareWorkingTree",
           "when": "scmProvider == git",
-          "group": "navigation@11"
-        },
-        {
-          "command": "gitStudio.diffUnpushed",
-          "when": "scmProvider == git",
-          "group": "1_compare@1"
-        },
-        {
-          "command": "gitStudio.diffStash",
-          "when": "scmProvider == git",
-          "group": "1_compare@2"
-        },
-        {
-          "command": "gitStudio.diffRefs",
-          "when": "scmProvider == git",
-          "group": "1_compare@3"
-        },
-        {
-          "command": "gitStudio.diffRefsMergeBase",
-          "when": "scmProvider == git",
-          "group": "1_compare@4"
-        },
-        {
-          "command": "gitStudio.diffMergeBase",
-          "when": "scmProvider == git",
-          "group": "1_compare@5"
-        },
-        {
-          "command": "gitStudio.diffIncoming",
-          "when": "scmProvider == git",
-          "group": "1_compare@6"
-        },
-        {
-          "command": "gitStudio.diffTagPrevious",
-          "when": "scmProvider == git",
-          "group": "1_compare@7"
-        },
-        {
-          "command": "gitStudio.diffRemoteTracking",
-          "when": "scmProvider == git",
-          "group": "1_compare@8"
+          "group": "navigation@1"
         }
       ],
       "scm/resourceState/context": [
@@ -377,6 +312,73 @@
           "command": "gitStudio.diffFileRevisions",
           "when": "resourceScheme == file",
           "group": "9_git@4"
+        }
+      ],
+      "scm/repository": [
+        {
+          "command": "gitStudio.worktreeWorkbench",
+          "when": "scmProvider == git",
+          "group": "2_main@8"
+        },
+        {
+          "command": "gitStudio.stashWorkbench",
+          "when": "scmProvider == git",
+          "group": "2_main@9"
+        },
+        {
+          "command": "gitStudio.openBoard",
+          "when": "scmProvider == git",
+          "group": "2_main@10"
+        },
+        {
+          "command": "gitStudio.diffUnpushed",
+          "when": "scmProvider == git",
+          "group": "5_compare@1"
+        },
+        {
+          "command": "gitStudio.diffIncoming",
+          "when": "scmProvider == git",
+          "group": "5_compare@2"
+        },
+        {
+          "command": "gitStudio.diffRemoteTracking",
+          "when": "scmProvider == git",
+          "group": "5_compare@3"
+        },
+        {
+          "command": "gitStudio.diffStash",
+          "when": "scmProvider == git",
+          "group": "5_compare@4"
+        },
+        {
+          "command": "gitStudio.openHistory",
+          "when": "scmProvider == git",
+          "group": "2_view@1"
+        },
+        {
+          "command": "gitStudio.reflogWorkbench",
+          "when": "scmProvider == git",
+          "group": "2_view@2"
+        },
+        {
+          "command": "gitStudio.diffRefs",
+          "when": "scmProvider == git",
+          "group": "6_refcompare@1"
+        },
+        {
+          "command": "gitStudio.diffRefsMergeBase",
+          "when": "scmProvider == git",
+          "group": "6_refcompare@2"
+        },
+        {
+          "command": "gitStudio.diffMergeBase",
+          "when": "scmProvider == git",
+          "group": "6_refcompare@3"
+        },
+        {
+          "command": "gitStudio.diffTagPrevious",
+          "when": "scmProvider == git",
+          "group": "6_refcompare@4"
         }
       ]
     },
