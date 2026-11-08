@@ -161,6 +161,7 @@ export type HostMessage =
   | { type: 'commits'; requestId: number; append: boolean; rows: CommitRow[]; graph: GraphRow[]; hasMore: boolean; stale: boolean }
   | { type: 'detail'; hash: string; detail: CommitDetail | null; error?: string }
   | { type: 'commitItems'; hash: string; items: CommitItemLink[] }
+  | { type: 'filePreview'; hash: string; path: string; patch: string; error?: string }
   | { type: 'filters'; filters: Filters }
   | { type: 'focusCommit'; hash: string }
   | { type: 'operation'; operation: string | null }
@@ -177,6 +178,7 @@ export type WebviewMessage =
   | { type: 'openFileWithLocal'; hash: string; path: string; oldPath?: string; status: ChangeStatus; before?: boolean }
   | { type: 'getFileFromRevision'; hash: string; path: string }
   | { type: 'fileActions'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
+  | { type: 'previewFile'; hash: string; path: string }
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'commitActions'; hash: string }
   | { type: 'abortOperation' }

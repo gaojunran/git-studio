@@ -5,6 +5,8 @@ import { formatDateTime } from '../format';
 
 interface Props {
   detail: CommitDetail | null;
+  preview: { path: string; patch: string; error?: string } | null;
+  onClosePreview: () => void;
   items: CommitItemLink[];
   loading: boolean;
   error: string | null;
@@ -120,7 +122,7 @@ function renderHashes(text: string, keyPrefix: string, onOpenCommit: (hash: stri
 }
 
 export function DetailPane(props: Props) {
-  const { detail, loading, error, selected, compare } = props;
+  const { detail, loading, error, selected, compare, preview } = props;
   const [expanded, setExpanded] = useState(false);
   const [fileQuery, setFileQuery] = useState('');
 
@@ -327,6 +329,39 @@ export function DetailPane(props: Props) {
         })}
         {files.length === 0 && <div className="muted files__empty">No files match.</div>}
       </div>
+
+      {preview && (
+        <div className="detail__preview">
+          <div className="detail__preview-head">
+            <span className="mono">{preview.path}</span>
+            <button className="btn btn--icon btn--tiny" onClick={props.onClosePreview} title="Close preview">
+              ×
+            </button>
+          </div>
+          {preview.error ? (
+            <div className="error-text detail__preview-body">{preview.error}</div>
+          ) : (
+            <pre className="detail__preview-body">
+              {preview.patch.split('\n').map((line, index) => (
+                <div
+                  key={index}
+                  className={
+                    line.startsWith('+') && !line.startsWith('+++')
+                      ? 'diff-line diff-line--add'
+                      : line.startsWith('-') && !line.startsWith('---')
+                        ? 'diff-line diff-line--del'
+                        : line.startsWith('@@')
+                          ? 'diff-line diff-line--hunk'
+                          : 'diff-line'
+                  }
+                >
+                  {line || ' '}
+                </div>
+              ))}
+            </pre>
+          )}
+        </div>
+      )}
 
       <div className="detail__footer">
         <button className="btn" onClick={props.onOpenChanges}>

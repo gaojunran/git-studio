@@ -279,6 +279,9 @@ export class HistoryPanel {
         case 'fileActions':
           await this.fileActions(message.hash, message.path, message.oldPath, message.status);
           break;
+        case 'previewFile':
+          await this.previewFile(message.hash, message.path);
+          break;
         case 'openCommitChanges':
           await this.openCommitChanges(message.hash);
           break;
@@ -665,6 +668,7 @@ export class HistoryPanel {
     const picked = await vscode.window.showQuickPick(
       [
         { id: 'diff', label: '$(diff) Show Diff' },
+        { id: 'preview', label: '$(preview) Preview Diff' },
         { id: 'local', label: '$(compare-changes) Compare with Working Tree' },
         { id: 'before', label: '$(compare-changes) Compare Before with Working Tree' },
         { id: 'history', label: '$(history) File History' },
@@ -684,6 +688,9 @@ export class HistoryPanel {
     switch (picked.id) {
       case 'diff':
         await this.openFileDiff(hash, filePath, oldPath, status);
+        return;
+      case 'preview':
+        await this.previewFile(hash, filePath);
         return;
       case 'local':
         await this.openFileWithLocal(hash, filePath, oldPath, status, false);
@@ -709,6 +716,22 @@ export class HistoryPanel {
       case 'cherry-pick':
         await this.applyFileChanges(file, hash, false);
         return;
+    }
+  }
+
+  private async previewFile(hash: string, filePath: string): Promise<void> {
+    const detail = await this.detailFor(hash);
+    if (!detail) {
+      return;
+    }
+    const parent = detail.parents[detail.parentIndex];
+    try {
+      const patch = parent
+        ? await this.services.runner.run(['diff', parent, hash, '--', filePath], this.repo.root)
+        : await this.services.runner.run(['show', '--format=', hash, '--', filePath], this.repo.root);
+      this.post({ type: 'filePreview', hash, path: filePath, patch });
+    } catch (error) {
+      this.post({ type: 'filePreview', hash, path: filePath, patch: '', error: errorText(error) });
     }
   }
 

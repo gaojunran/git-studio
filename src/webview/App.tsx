@@ -38,6 +38,7 @@ export function App() {
   const [commitItems, setCommitItems] = useState<CommitItemLink[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ path: string; patch: string; error?: string } | null>(null);
   const [compare, setCompare] = useState<string | null>(null);
   const [focusHash, setFocusHash] = useState<string | null>(null);
 
@@ -123,6 +124,10 @@ export function App() {
           setCommitItems([]);
           setDetailError(message.error ?? null);
           setDetailLoading(false);
+          break;
+        }
+        case 'filePreview': {
+          setPreview({ path: message.path, patch: message.patch, error: message.error });
           break;
         }
         case 'commitItems': {
@@ -218,6 +223,7 @@ export function App() {
     parentIndexRef.current = parentIndex;
     setSelected(hash);
     setDetail(null);
+    setPreview(null);
     setDetailError(null);
     setDetailLoading(true);
     post({ type: 'selectCommit', hash, parentIndex });
@@ -358,6 +364,8 @@ export function App() {
           items={commitItems}
           loading={detailLoading}
           error={detailError}
+          preview={preview}
+          onClosePreview={() => setPreview(null)}
           selected={selected}
           compare={compare}
           onSelectParent={select}
