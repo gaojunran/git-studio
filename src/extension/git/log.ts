@@ -100,7 +100,7 @@ export function buildLogArgs(query: LogQuery): string[] {
     args.push(`--until=${query.until}`);
   }
   if (query.path) {
-    if (query.follow) {
+    if (query.follow && !query.lineRange) {
       args.push('--follow');
     }
   }

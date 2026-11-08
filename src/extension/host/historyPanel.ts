@@ -422,7 +422,7 @@ export class HistoryPanel {
         refs: this.filters.refs,
         path: this.paths ? undefined : this.filters.path || search.path || undefined,
         paths: this.paths,
-        follow: Boolean(!this.paths && (this.filters.path || search.path) && this.filePath),
+        follow: Boolean(!this.paths && !this.filters.lineRange && (this.filters.path || search.path) && this.filePath),
         author: this.filters.author || search.author,
         message: search.text || undefined,
         hash: search.hash,

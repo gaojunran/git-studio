@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.1
+
+- Fixed `--follow requires exactly one pathspec` when opening history for a selected line range: a
+  `-L` query never uses `--follow`.
+
 ## 0.20.0
 
 - `Git Studio: History for Selection` follows the selected line range with `git log -L`; the range can
