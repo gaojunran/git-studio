@@ -1,6 +1,6 @@
 # Git Studio — TODO
 
-> 当前版本：`0.16.0`
+> 当前版本：`0.16.1`
 > 定位：IntelliJ Log 风格的 Git 历史工作台。History 用 WebView，其余尽量复用 VS Code 原生 UI。
 
 ## 已完成（基线）

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1
+
+- Ref picker: show each commit's subject next to its hash; merge local and remote branches into one
+  Branches group, with one cloud button per remote that has the same branch; Cmd+Shift+V opens
+  Compare Working Tree with Merge Base.
+
 ## 0.16.0
 
 - Board: searchable multi-select labels and reviewers, merge split button with remembered method, mark ready, close reasons, checks dialog, review threads, tracker state and comment writes, GitLab / Gitea / Gerrit built-in providers.

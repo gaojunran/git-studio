@@ -12,6 +12,8 @@ export interface RefInfo {
   /** Unix seconds of the last commit on the ref. */
   committerDate: number;
   upstream?: string;
+  /** Subject of the commit the ref points at. */
+  subject?: string;
   current: boolean;
 }
 

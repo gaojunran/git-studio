@@ -8,6 +8,8 @@ import { inferBaseRef, loadMainlines, type BaseInference } from './baseBranch';
 
 interface RefItem extends vscode.QuickPickItem {
   value?: string;
+  /** One entry per button, in the same order as `buttons`. */
+  remoteValues?: string[];
 }
 
 export interface PickRefOptions {
@@ -25,6 +27,7 @@ const LIMIT = {
   mainlines: 20,
   local: 40,
   remote: 40,
+  branches: 80,
   tags: 20
 };
 
@@ -32,7 +35,7 @@ function refItem(ref: RefInfo): RefItem {
   return {
     label: ref.shortName,
     description: ref.current ? 'current' : ref.type === 'tag' ? 'tag' : ref.type === 'remote' ? 'remote' : 'branch',
-    detail: ref.oid.slice(0, 8),
+    detail: `${ref.oid.slice(0, 8)}${ref.subject ? `  ${ref.subject}` : ''}`,
     value: ref.name
   };
 }
@@ -66,6 +69,13 @@ function openPicker(items: RefItem[], placeholder: string): PickerHandle {
       resolve(value);
     };
     quickPick.onDidAccept(() => done(quickPick.selectedItems[0]));
+    quickPick.onDidTriggerItemButton((event) => {
+      const index = event.item.buttons?.indexOf(event.button) ?? -1;
+      const value = index >= 0 ? event.item.remoteValues?.[index] : undefined;
+      if (value) {
+        done({ ...event.item, value });
+      }
+    });
     quickPick.onDidHide(() => done(undefined));
   });
   quickPick.show();
@@ -198,6 +208,48 @@ function buildItems(
     visible.slice(0, limit).forEach((ref) => used.add(ref.name));
   };
 
+  const addBranches = () => {
+    const local = refs.filter((ref) => ref.type === 'local' || ref.type === 'head');
+    const remoteRefs = refs.filter((ref) => ref.type === 'remote');
+    const remoteNames = [...new Set(remoteRefs.map((ref) => ref.shortName.split('/')[0]))].sort();
+    const localNames = new Set(local.map((ref) => ref.shortName));
+    const remoteOnly = remoteRefs.filter((ref) => {
+      const slash = ref.shortName.indexOf('/');
+      return slash > 0 && !localNames.has(ref.shortName.slice(slash + 1));
+    });
+    const visible = sorted([...local, ...remoteOnly]).filter((ref) => !exclude(ref));
+    if (visible.length === 0) {
+      return;
+    }
+    const limit = all ? visible.length : Math.min(visible.length, LIMIT.branches);
+    if (limit < visible.length) {
+      capped = true;
+    }
+    items.push({ label: 'Branches', kind: vscode.QuickPickItemKind.Separator });
+    for (const ref of visible.slice(0, limit)) {
+      const item = refItem(ref);
+      const suffix = contained.has(ref.name) && !ref.current ? ' · contained' : '';
+      if (ref.type === 'remote') {
+        items.push({ ...item, description: `remote${suffix}` });
+      } else {
+        const remotes = remoteNames.flatMap((remote) => {
+          const remoteRef = remoteRefs.find((candidate) => candidate.shortName === `${remote}/${ref.shortName}`);
+          return remoteRef ? [{ remote, name: remoteRef.name }] : [];
+        });
+        items.push({
+          ...item,
+          description: `branch${suffix}`,
+          buttons: remotes.map((remote) => ({
+            iconPath: new vscode.ThemeIcon('cloud'),
+            tooltip: `Use ${remote.remote}/${ref.shortName}`
+          })),
+          remoteValues: remotes.map((remote) => remote.name)
+        });
+      }
+      used.add(ref.name);
+    }
+  };
+
   const customItem: RefItem = { label: '$(edit) Custom revision…', value: '__custom__' };
   const headItem: RefItem = {
     label: 'HEAD',
@@ -212,7 +264,7 @@ function buildItems(
       items.push({
         label: `$(lightbulb) ${guess.label}`,
         description: `inferred base · ${guess.reason}`,
-        detail: ref?.oid.slice(0, 8),
+        detail: `${ref?.oid.slice(0, 8) ?? ''}${ref?.subject ? `  ${ref.subject}` : ''}`,
         value: guess.ref
       });
       used.add(guess.ref);
@@ -232,8 +284,7 @@ function buildItems(
     }
   }
 
-  addGroup('Local branches', refs.filter((ref) => ref.type === 'local' || ref.type === 'head'));
-  addGroup('Remote branches', refs.filter((ref) => ref.type === 'remote'));
+  addBranches();
   addGroup('Tags', refs.filter((ref) => ref.type === 'tag'));
 
   if (capped) {
