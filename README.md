@@ -19,6 +19,8 @@ place to learn and one source of truth for repository state.
 - Commit details: full message, parents, author/committer, changed files with per-file stats.
 - Merge commits: switch the diff base between parent 1 and parent 2.
 - Open a commit as a native multi-file diff; compare any two commits.
+- Clicking a file in the detail pane opens its diff beside the history panel as a preview tab, so the
+  next file replaces that diff without navigating back.
 - File history with rename following (`git log --follow`), opened from Explorer, SCM or the editor.
 - Full-file blame annotations with configurable template and clickable commit links.
 - Compare the working tree with any branch, tag or commit using three-dot semantics (merge base to
@@ -40,8 +42,9 @@ place to learn and one source of truth for repository state.
   HEAD, and asks when several branches match instead of failing.
 - Commit actions from the detail pane or a row right-click:
   create branch here, create tag here, checkout (detached), compare with current branch,
-  compare with working tree, open on GitHub/GitLab/Bitbucket, copy subject, message or hash.
-- Reword any commit on the current first-parent line from the same menu.
+  compare with working tree, merge into current branch, rebase current branch onto this commit,
+  open on GitHub/GitLab/Bitbucket, copy subject, message, hash, URL or patch.
+- Reword, squash into parent or drop any commit on the current first-parent line from the same menu.
 - History rewriting: reset (soft/mixed/hard), revert and cherry-pick from the same menu.
   Merge commits use parent 1. Conflicts surface in a banner with Abort action.
 - Interactive rebase from any ancestor commit: reorder, pick, reword, edit, squash, fixup, drop.

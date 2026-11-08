@@ -19,10 +19,16 @@ type ActionId =
   | 'copy-subject'
   | 'copy-message'
   | 'copy-hash'
+  | 'copy-url'
+  | 'copy-patch'
   | 'reset'
   | 'revert'
   | 'cherry-pick'
+  | 'merge'
+  | 'rebase-onto'
   | 'reword'
+  | 'drop'
+  | 'squash'
   | 'rebase'
   | 'abort';
 
@@ -61,7 +67,11 @@ export class CommitActionRunner {
       { id: 'reset', label: '$(discard) Reset Current Branch to Here…' },
       { id: 'revert', label: '$(history) Revert Commit…' },
       { id: 'cherry-pick', label: '$(git-commit) Cherry-pick onto Current Branch…' },
+      { id: 'merge', label: '$(git-merge) Merge Commit into Current Branch…' },
+      { id: 'rebase-onto', label: '$(git-rebase) Rebase Current Branch onto This Commit…' },
       { id: 'reword', label: '$(edit) Reword Commit…' },
+      { id: 'squash', label: '$(fold) Squash Commit into Parent…' },
+      { id: 'drop', label: '$(trash) Drop Commit…' },
       { id: 'rebase', label: '$(git-pull-request) Interactively Rebase from Here…' }
     ];
 
@@ -78,7 +88,9 @@ export class CommitActionRunner {
       { id: 'remote', label: '$(globe) Open Commit on Remote' },
       { id: 'copy-subject', label: '$(copy) Copy Commit Subject' },
       { id: 'copy-message', label: '$(copy) Copy Commit Message' },
-      { id: 'copy-hash', label: '$(copy) Copy Commit Hash' }
+      { id: 'copy-hash', label: '$(copy) Copy Commit Hash' },
+      { id: 'copy-url', label: '$(link) Copy Commit URL' },
+      { id: 'copy-patch', label: '$(copy) Copy Commit as Patch' }
     );
 
     const picked = await vscode.window.showQuickPick(items, {
@@ -124,6 +136,20 @@ export class CommitActionRunner {
         case 'copy-message':
           await vscode.env.clipboard.writeText(detail?.message ?? '');
           break;
+        case 'copy-url': {
+          const url = this.remoteUrl(hash);
+          if (url) {
+            await vscode.env.clipboard.writeText(url);
+          } else {
+            void vscode.window.showInformationMessage('Git Studio: no supported remote URL for this commit.');
+          }
+          break;
+        }
+        case 'copy-patch': {
+          const patch = await this.services.runner.run(['format-patch', '-1', '--stdout', hash], this.getRepo().root);
+          await vscode.env.clipboard.writeText(patch);
+          break;
+        }
         case 'copy-hash':
           await vscode.env.clipboard.writeText(hash);
           break;
@@ -136,8 +162,20 @@ export class CommitActionRunner {
         case 'cherry-pick':
           await this.cherryPick(hash, detail);
           break;
+        case 'merge':
+          await this.merge(hash);
+          break;
+        case 'rebase-onto':
+          await this.rebaseOnto(hash);
+          break;
         case 'reword':
           await this.reword(hash, detail);
+          break;
+        case 'drop':
+          await this.rewritePlan(hash, detail, 'drop');
+          break;
+        case 'squash':
+          await this.rewritePlan(hash, detail, 'squash');
           break;
         case 'rebase':
           await this.openRebase(hash);
@@ -359,6 +397,90 @@ export class CommitActionRunner {
     }
   }
 
+  private async merge(hash: string): Promise<void> {
+    const repo = this.getRepo();
+    const head = await headOid(this.services.runner, repo.root);
+    const branch = repo.repo.state.HEAD?.name ?? 'HEAD';
+    const answer = await vscode.window.showWarningMessage(
+      `Merge ${shortHash(hash)} into ${branch}?`,
+      { modal: true },
+      'Merge'
+    );
+    if (answer !== 'Merge') {
+      return;
+    }
+
+    await this.services.writes.merge(repo.root, hash, head);
+    await this.record(`merge ${shortHash(hash)}`, head);
+    await this.onChanged();
+  }
+
+  private async rebaseOnto(hash: string): Promise<void> {
+    const repo = this.getRepo();
+    const head = await headOid(this.services.runner, repo.root);
+    const branch = repo.repo.state.HEAD?.name ?? 'HEAD';
+    const answer = await vscode.window.showWarningMessage(
+      `Rebase ${branch} onto ${shortHash(hash)}?`,
+      { modal: true },
+      'Rebase'
+    );
+    if (answer !== 'Rebase') {
+      return;
+    }
+
+    await this.services.writes.rebaseOnto(repo.root, hash, head);
+    await this.record(`rebase ${branch} onto ${shortHash(hash)}`, head);
+    await this.onChanged();
+  }
+
+  private async rewritePlan(
+    hash: string,
+    detail: CommitDetail | undefined,
+    action: 'drop' | 'squash'
+  ): Promise<void> {
+    const repo = this.getRepo();
+    const parent = detail?.parents[0];
+    if (!parent) {
+      void vscode.window.showErrorMessage('Git Studio: a root commit cannot be rewritten this way.');
+      return;
+    }
+
+    const label = action === 'drop' ? 'Drop' : 'Squash';
+    const answer = await vscode.window.showWarningMessage(
+      `${label} ${shortHash(hash)}? This rewrites the current branch.`,
+      { modal: true },
+      label
+    );
+    if (answer !== label) {
+      return;
+    }
+
+    const plan = await buildRebasePlan(this.services.runner, repo.root, parent);
+    if (plan.error) {
+      throw new Error(plan.error);
+    }
+    const item = plan.items.find((candidate) => candidate.hash === hash);
+    if (!item) {
+      throw new Error('The commit is not on the current first-parent line.');
+    }
+    item.action = action;
+
+    const before = plan.head;
+    const result = await this.services.writes.rebase(repo.root, plan, before);
+    await this.record(`${action} ${shortHash(hash)}`, before);
+    await this.onChanged();
+    if (result === 'stopped') {
+      void vscode.window.showWarningMessage('Git Studio: the rewrite stopped on a conflict. Resolve it, then Continue or Abort.');
+    }
+  }
+
+  private remoteUrl(hash: string): string | undefined {
+    const repo = this.getRepo();
+    const remote = pickRemoteUrl(repo.repo.state.remotes);
+    const template = vscode.workspace.getConfiguration('gitStudio').get<string>('remote.commitUrlTemplate', '');
+    return remote ? commitUrl(remote, hash, template) : undefined;
+  }
+
   private async abort(): Promise<void> {
     const repo = this.getRepo();
     const operation = await detectOperation(this.services.runner, repo.root);
@@ -423,10 +545,7 @@ export class CommitActionRunner {
   }
 
   private async openOnRemote(hash: string): Promise<void> {
-    const repo = this.getRepo();
-    const remote = pickRemoteUrl(repo.repo.state.remotes);
-    const template = vscode.workspace.getConfiguration('gitStudio').get<string>('remote.commitUrlTemplate', '');
-    const url = remote ? commitUrl(remote, hash, template) : undefined;
+    const url = this.remoteUrl(hash);
     if (!url) {
       void vscode.window.showInformationMessage('Git Studio: no supported remote URL for this commit.');
       return;

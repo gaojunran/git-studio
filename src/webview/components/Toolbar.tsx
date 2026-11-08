@@ -25,7 +25,6 @@ function hasAdvancedFilters(filters: Filters): boolean {
       filters.caseSensitive ||
       filters.firstParent ||
       filters.noMerges ||
-      filters.mergesOnly ||
       filters.order !== 'date'
   );
 }
@@ -180,15 +179,6 @@ export function Toolbar(props: Props) {
               onChange={(event) => props.onChange({ noMerges: event.target.checked })}
             />
             No merges
-          </label>
-
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={filters.mergesOnly}
-              onChange={(event) => props.onChange({ mergesOnly: event.target.checked })}
-            />
-            Merges only
           </label>
 
           <label className="field">

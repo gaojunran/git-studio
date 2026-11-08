@@ -44,7 +44,6 @@ function emptyFilters(): Filters {
     caseSensitive: false,
     firstParent: false,
     noMerges: false,
-    mergesOnly: false,
     since: '',
     until: '',
     order: vscode.workspace.getConfiguration('gitStudio').get<'date' | 'topo'>('history.order', 'date')
@@ -122,7 +121,7 @@ export class HistoryPanel {
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
-        retainContextWhenHidden: false,
+        retainContextWhenHidden: true,
         localResourceRoots: [vscode.Uri.joinPath(services.extensionUri, 'dist', 'webview')]
       }
     );
@@ -394,7 +393,7 @@ export class HistoryPanel {
         caseSensitive: this.filters.caseSensitive || Boolean(search.caseSensitive),
         firstParent: this.filters.firstParent || Boolean(search.firstParent),
         noMerges: this.filters.noMerges || Boolean(search.noMerges),
-        mergesOnly: this.filters.mergesOnly || Boolean(search.mergesOnly),
+        mergesOnly: Boolean(search.mergesOnly),
         since: this.filters.since || search.since || undefined,
         until: this.filters.until || search.until || undefined,
         order: this.filters.order,
@@ -428,7 +427,6 @@ export class HistoryPanel {
             this.filters.since ||
             this.filters.until ||
             this.filters.noMerges ||
-            this.filters.mergesOnly ||
             this.paths
         )
       });
@@ -553,7 +551,8 @@ export class HistoryPanel {
       'vscode.diff',
       left,
       right,
-      `${path.basename(filePath)} (${shortHash(hash)})`
+      `${path.basename(filePath)} (${shortHash(hash)})`,
+      { viewColumn: vscode.ViewColumn.Beside, preview: true }
     );
   }
 

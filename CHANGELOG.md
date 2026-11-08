@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.4
+
+- Toolbar text is vertically centered in every button and the search input.
+- Removed the redundant `Merges only` checkbox; `is:merge` remains available in search.
+- Commit menu adds merge into current, rebase onto this commit, squash into parent, drop, copy URL
+  and copy patch.
+- History keeps its webview alive when hidden, so switching windows no longer reloads it.
+- File diffs open beside the history panel as a preview tab, so the next file replaces the diff
+  without navigating back.
+
 ## 0.16.3
 
 - Removed the duplicate filter input; the search box keeps the GitHub-style tokens and the Filters

@@ -103,6 +103,14 @@ select {
 
 .toolbar__row .btn {
   height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.toolbar__row .btn--repo {
+  gap: 5px;
 }
 
 .toolbar__row .btn--icon {
@@ -113,6 +121,9 @@ select {
 
 .toolbar__row .input {
   height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 26px;
 }
 
 .toolbar__spacer {

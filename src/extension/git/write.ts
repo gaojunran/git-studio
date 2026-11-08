@@ -96,6 +96,20 @@ export class WriteCoordinator {
     });
   }
 
+  async merge(cwd: string, hash: string, expectedHead: string | undefined): Promise<void> {
+    await this.run(cwd, expectedHead, async () => {
+      const oid = await resolveCommit(this.runner, cwd, hash);
+      await this.runner.run(['merge', '--no-edit', oid], cwd);
+    });
+  }
+
+  async rebaseOnto(cwd: string, hash: string, expectedHead: string | undefined): Promise<void> {
+    await this.run(cwd, expectedHead, async () => {
+      const oid = await resolveCommit(this.runner, cwd, hash);
+      await this.runner.run(['rebase', oid], cwd);
+    });
+  }
+
   async abort(cwd: string): Promise<void> {
     await this.exclusive(async () => {
       const operation = await detectOperation(this.runner, cwd);

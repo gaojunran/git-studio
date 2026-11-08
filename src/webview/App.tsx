@@ -233,7 +233,6 @@ export function App() {
       caseSensitive: false,
       firstParent: false,
       noMerges: false,
-      mergesOnly: false,
       since: '',
       until: '',
       order: 'date'
