@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.0
+
+- New Git Studio activity-bar sidebar that replaces the built-in Source Control view: repository and
+  branch switcher, ahead/behind, fetch/pull/push/publish, staged/changed/untracked/conflicted files,
+  per-file and bulk stage/unstage/discard, commit composer with amend and push, operation banner with
+  continue/skip/abort, stash shortcuts and workbench entries.
+
 ## 0.21.1
 
 - Removed the Branches sidebar from the history panel; its component and host actions stay in the

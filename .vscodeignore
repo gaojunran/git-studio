@@ -11,6 +11,7 @@ TODO.md
 tsconfig*.json
 vite.config.mts
 vite.board.config.mts
+vite.sidebar.config.mts
 vitest.config.mts
 .cortexkit/**
 esbuild.mjs
