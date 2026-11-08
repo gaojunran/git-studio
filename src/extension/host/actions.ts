@@ -27,6 +27,9 @@ type ActionId =
   | 'merge'
   | 'rebase-onto'
   | 'reword'
+  | 'fixup'
+  | 'squash-staged'
+  | 'push-here'
   | 'drop'
   | 'squash'
   | 'rebase'
@@ -70,6 +73,9 @@ export class CommitActionRunner {
       { id: 'merge', label: '$(git-merge) Merge Commit into Current Branch…' },
       { id: 'rebase-onto', label: '$(repo-push) Rebase Current Branch onto This Commit…' },
       { id: 'reword', label: '$(edit) Reword Commit…' },
+      { id: 'fixup', label: '$(fold) Fixup Staged Changes into This Commit…' },
+      { id: 'squash-staged', label: '$(fold) Squash Staged Changes into This Commit…' },
+      { id: 'push-here', label: '$(repo-push) Push All up to Here…' },
       { id: 'squash', label: '$(fold) Squash Commit into Parent…' },
       { id: 'drop', label: '$(trash) Drop Commit…' },
       { id: 'rebase', label: '$(git-pull-request) Interactively Rebase from Here…' }
@@ -170,6 +176,13 @@ export class CommitActionRunner {
           break;
         case 'reword':
           await this.reword(hash, detail);
+          break;
+        case 'fixup':
+        case 'squash-staged':
+          await this.fixupStaged(hash, detail, action === 'fixup' ? 'fixup' : 'squash');
+          break;
+        case 'push-here':
+          await this.pushUpToHere(hash);
           break;
         case 'drop':
           await this.rewritePlan(hash, detail, 'drop');
@@ -395,6 +408,72 @@ export class CommitActionRunner {
     if (result === 'stopped') {
       void vscode.window.showWarningMessage('Git Studio: the reword stopped on a conflict. Resolve it, then Continue or Abort.');
     }
+  }
+
+  private async fixupStaged(hash: string, detail: CommitDetail | undefined, mode: 'fixup' | 'squash'): Promise<void> {
+    const repo = this.getRepo();
+    const parent = detail?.parents[0];
+    if (!parent) {
+      void vscode.window.showErrorMessage('Git Studio: a root commit cannot be rewritten this way.');
+      return;
+    }
+    const label = mode === 'fixup' ? 'Fixup' : 'Squash';
+    const answer = await vscode.window.showWarningMessage(
+      `${label} the staged changes into ${shortHash(hash)}? This rewrites the current branch.`,
+      { modal: true },
+      label
+    );
+    if (answer !== label) {
+      return;
+    }
+
+    const before = await headOid(this.services.runner, repo.root);
+    await this.services.writes.createFixupCommit(repo.root, hash, mode, before);
+    const fixupHash = await headOid(this.services.runner, repo.root);
+    const plan = await buildRebasePlan(this.services.runner, repo.root, parent);
+    if (plan.error) {
+      throw new Error(plan.error);
+    }
+    const fixupItem = plan.items.find((candidate) => candidate.hash === fixupHash);
+    const targetIndex = plan.items.findIndex((candidate) => candidate.hash === hash);
+    if (!fixupItem || targetIndex < 0) {
+      throw new Error('The staged changes could not be folded into that commit.');
+    }
+    fixupItem.action = mode;
+    plan.items = plan.items.filter((candidate) => candidate !== fixupItem);
+    plan.items.splice(targetIndex + 1, 0, fixupItem);
+
+    const result = await this.services.writes.rebase(repo.root, plan, fixupHash);
+    await this.record(`${mode} staged into ${shortHash(hash)}`, fixupHash);
+    await this.onChanged();
+    if (result === 'stopped') {
+      void vscode.window.showWarningMessage('Git Studio: the rewrite stopped on a conflict. Resolve it, then Continue or Abort.');
+    }
+  }
+
+  private async pushUpToHere(hash: string): Promise<void> {
+    const repo = this.getRepo();
+    const upstream = await this.services.runner
+      .run(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], repo.root)
+      .then((value) => value.trim())
+      .catch(() => '');
+    const branch = repo.repo.state.HEAD?.name;
+    if (!branch) {
+      void vscode.window.showErrorMessage('Git Studio: detached HEAD has no branch to push to.');
+      return;
+    }
+    const remote = upstream ? upstream.split('/')[0] : 'origin';
+    const remoteBranch = upstream ? upstream.slice(remote.length + 1) : branch;
+    const answer = await vscode.window.showWarningMessage(
+      `Push ${remote}/${remoteBranch} up to ${shortHash(hash)}? Later local commits stay local.`,
+      { modal: true },
+      'Push'
+    );
+    if (answer !== 'Push') {
+      return;
+    }
+    await this.services.writes.pushUpTo(repo.root, hash, remote, remoteBranch);
+    void vscode.window.showInformationMessage(`Git Studio: pushed ${remote}/${remoteBranch} up to ${shortHash(hash)}.`);
   }
 
   private async merge(hash: string): Promise<void> {

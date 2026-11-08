@@ -117,6 +117,56 @@ export class WriteCoordinator {
     });
   }
 
+  async applyFilePatch(
+    cwd: string,
+    hash: string,
+    parent: string | undefined,
+    filePath: string,
+    reverse: boolean,
+    expectedHead: string | undefined
+  ): Promise<void> {
+    await this.run(cwd, expectedHead, async () => {
+      const oid = await resolveCommit(this.runner, cwd, hash);
+      const patch = parent
+        ? await this.runner.run(['diff', parent, oid, '--', filePath], cwd)
+        : await this.runner.run(['show', '--format=', oid, '--', filePath], cwd);
+      if (!patch.trim()) {
+        throw new Error(`No changes for ${filePath} in ${hash.slice(0, 7)}.`);
+      }
+      await this.runner.run(['apply', '--3way', '--whitespace=nowarn', ...(reverse ? ['-R'] : [])], cwd, { input: patch });
+    });
+  }
+
+  async createFixupCommit(
+    cwd: string,
+    hash: string,
+    mode: 'fixup' | 'squash',
+    expectedHead: string | undefined
+  ): Promise<void> {
+    await this.run(cwd, expectedHead, async () => {
+      const oid = await resolveCommit(this.runner, cwd, hash);
+      const staged = await this.runner
+        .run(['diff', '--cached', '--quiet'], cwd)
+        .then(() => false)
+        .catch((error) => error instanceof GitError && error.code === 1);
+      if (!staged) {
+        throw new Error('Stage the changes you want to fold into the commit first.');
+      }
+      await this.runner.run(['commit', mode === 'fixup' ? `--fixup=${oid}` : `--squash=${oid}`], cwd);
+    });
+  }
+
+  async pushUpTo(cwd: string, hash: string, remote: string, branch: string): Promise<void> {
+    await this.exclusive(async () => {
+      const operation = await detectOperation(this.runner, cwd);
+      if (operation) {
+        throw new Error(`${operation} is already in progress. Finish it or abort it first.`);
+      }
+      const oid = await resolveCommit(this.runner, cwd, hash);
+      await this.runner.run(['push', remote, `${oid}:refs/heads/${branch}`], cwd);
+    });
+  }
+
   async abort(cwd: string): Promise<void> {
     await this.exclusive(async () => {
       const operation = await detectOperation(this.runner, cwd);

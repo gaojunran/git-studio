@@ -14,10 +14,7 @@ interface Props {
   onOpenCommit: (hash: string) => void;
   onSelectParentIndex: (index: number) => void;
   onOpenFileDiff: (file: FileChange) => void;
-  onOpenFileWithLocal: (file: FileChange, before: boolean) => void;
-  onGetFileFromRevision: (file: FileChange) => void;
-  onOpenFileHistory: (filePath: string) => void;
-  onOpenFileAtRevision: (filePath: string) => void;
+  onFileActions: (file: FileChange) => void;
   onOpenChanges: () => void;
   onCompare: () => void;
   onActions: () => void;
@@ -316,63 +313,13 @@ export function DetailPane(props: Props) {
               <span className="file__actions">
                 <button
                   className="btn btn--icon btn--tiny"
-                  title="Get this file from this revision"
+                  title="File actions"
                   onClick={(event) => {
                     event.stopPropagation();
-                    props.onGetFileFromRevision(file);
+                    props.onFileActions(file);
                   }}
                 >
-                  ⤓
-                </button>
-                <button
-                  className="btn btn--icon btn--tiny"
-                  title="Copy path"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onCopy(file.path);
-                  }}
-                >
-                  ⧉
-                </button>
-                <button
-                  className="btn btn--icon btn--tiny"
-                  title="Compare with Working Tree"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onOpenFileWithLocal(file, false);
-                  }}
-                >
-                  ⇄
-                </button>
-                <button
-                  className="btn btn--icon btn--tiny"
-                  title="Compare before with Working Tree"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onOpenFileWithLocal(file, true);
-                  }}
-                >
-                  ⇆
-                </button>
-                <button
-                  className="btn btn--icon btn--tiny"
-                  title="File history"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onOpenFileHistory(file.path);
-                  }}
-                >
-                  ⧖
-                </button>
-                <button
-                  className="btn btn--icon btn--tiny"
-                  title="Open at this revision"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onOpenFileAtRevision(file.path);
-                  }}
-                >
-                  ↗
+                  ⋯
                 </button>
               </span>
             </div>

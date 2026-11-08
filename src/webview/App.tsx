@@ -373,22 +373,16 @@ export function App() {
               status: file.status
             })
           }
-          onOpenFileWithLocal={(file, before) =>
+          onFileActions={(file) =>
             selected &&
             post({
-              type: 'openFileWithLocal',
+              type: 'fileActions',
               hash: selected,
               path: file.path,
               oldPath: file.oldPath,
-              status: file.status,
-              before
+              status: file.status
             })
           }
-          onGetFileFromRevision={(file) =>
-            selected && post({ type: 'getFileFromRevision', hash: selected, path: file.path })
-          }
-          onOpenFileHistory={(filePath) => selected && post({ type: 'openFileHistory', path: filePath, hash: selected })}
-          onOpenFileAtRevision={(filePath) => selected && post({ type: 'openFileAtRevision', hash: selected, path: filePath })}
           onOpenChanges={() => selected && post({ type: 'openCommitChanges', hash: selected })}
           onCompare={() => selected && compare && post({ type: 'compare', a: compare, b: selected })}
           onActions={() => selected && post({ type: 'commitActions', hash: selected })}

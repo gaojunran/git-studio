@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0
+
+- Commit menu adds `Fixup Staged Changes into This Commit`, `Squash Staged Changes into This Commit`
+  and `Push All up to Here`.
+- Changed files collapse their actions into one `⋯` menu: show diff, compare with working tree,
+  compare before with working tree, file history, open at revision, copy path, get from revision,
+  revert this file's changes and apply this file's changes to the working tree.
+
 ## 0.18.1
 
 - Detail pane spacing: grouped message, metadata, linked items, files and footer with consistent

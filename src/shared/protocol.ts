@@ -176,6 +176,7 @@ export type WebviewMessage =
   | { type: 'openFileDiff'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'openFileWithLocal'; hash: string; path: string; oldPath?: string; status: ChangeStatus; before?: boolean }
   | { type: 'getFileFromRevision'; hash: string; path: string }
+  | { type: 'fileActions'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'commitActions'; hash: string }
   | { type: 'abortOperation' }

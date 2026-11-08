@@ -22,8 +22,9 @@ place to learn and one source of truth for repository state.
 - Commit details: full message, parents, author and committer identity, authored and committed
   timestamps, GPG signature, refs pointing at the commit, changed files with per-file stats.
   `←` / `→` jump to the parent or child commit, and hashes in the message are links.
-- Per-file actions: diff, compare with working tree, compare the parent with working tree, file
-  history, open at this revision, copy path, and restore the file from the selected revision.
+- Per-file actions live in one `⋯` menu: diff, compare with working tree, compare the parent with
+  working tree, file history, open at this revision, copy path, restore from this revision, revert this
+  file's changes, and apply this file's changes to the working tree.
 - Merge commits: switch the diff base between parent 1 and parent 2.
 - Open a commit as a native multi-file diff; compare any two commits.
 - Clicking a file in the detail pane opens its diff beside the history panel as a preview tab, so the
@@ -52,6 +53,9 @@ place to learn and one source of truth for repository state.
   compare with working tree, merge into current branch, rebase current branch onto this commit,
   open on GitHub/GitLab/Bitbucket, copy subject, message, hash, URL or patch.
 - Reword, squash into parent or drop any commit on the current first-parent line from the same menu.
+- Fold the currently staged changes into a commit with `Fixup Staged Changes into This Commit` or
+  `Squash Staged Changes into This Commit`, and `Push All up to Here` to publish a branch only up to
+  the selected commit.
 - History rewriting: reset (soft/mixed/hard), revert and cherry-pick from the same menu.
   Merge commits use parent 1. Conflicts surface in a banner with Abort action.
 - Interactive rebase from any ancestor commit: reorder, pick, reword, edit, squash, fixup, drop.

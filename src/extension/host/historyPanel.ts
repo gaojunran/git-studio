@@ -276,6 +276,9 @@ export class HistoryPanel {
         case 'getFileFromRevision':
           await this.getFileFromRevision(message.hash, message.path);
           break;
+        case 'fileActions':
+          await this.fileActions(message.hash, message.path, message.oldPath, message.status);
+          break;
         case 'openCommitChanges':
           await this.openCommitChanges(message.hash);
           break;
@@ -648,6 +651,93 @@ export class HistoryPanel {
       await this.services.writes.restoreFile(this.repo.root, hash, filePath, head);
       await this.afterWrite();
       void vscode.window.showInformationMessage(`Git Studio: restored ${filePath} from ${shortHash(hash)}.`);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Git Studio: ${errorText(error)}`);
+    }
+  }
+
+  private async fileActions(
+    hash: string,
+    filePath: string,
+    oldPath: string | undefined,
+    status: FileChange['status']
+  ): Promise<void> {
+    const picked = await vscode.window.showQuickPick(
+      [
+        { id: 'diff', label: '$(diff) Show Diff' },
+        { id: 'local', label: '$(compare-changes) Compare with Working Tree' },
+        { id: 'before', label: '$(compare-changes) Compare Before with Working Tree' },
+        { id: 'history', label: '$(history) File History' },
+        { id: 'revision', label: '$(go-to-file) Open at This Revision' },
+        { id: 'copy', label: '$(copy) Copy Path' },
+        { id: 'restore', label: '$(cloud-download) Get This File from This Revision' },
+        { id: 'revert', label: '$(discard) Revert This File\u2019s Changes' },
+        { id: 'cherry-pick', label: '$(git-commit) Apply This File\u2019s Changes to Working Tree' }
+      ],
+      { title: `${path.basename(filePath)} · ${shortHash(hash)}`, placeHolder: 'Choose a file action' }
+    );
+    if (!picked) {
+      return;
+    }
+
+    const file: FileChange = { path: filePath, oldPath, status, additions: 0, deletions: 0, binary: false };
+    switch (picked.id) {
+      case 'diff':
+        await this.openFileDiff(hash, filePath, oldPath, status);
+        return;
+      case 'local':
+        await this.openFileWithLocal(hash, filePath, oldPath, status, false);
+        return;
+      case 'before':
+        await this.openFileWithLocal(hash, filePath, oldPath, status, true);
+        return;
+      case 'history':
+        this.openFileHistory(filePath);
+        return;
+      case 'revision':
+        await this.openFileAtRevision(hash, filePath);
+        return;
+      case 'copy':
+        await vscode.env.clipboard.writeText(filePath);
+        return;
+      case 'restore':
+        await this.getFileFromRevision(hash, filePath);
+        return;
+      case 'revert':
+        await this.applyFileChanges(file, hash, true);
+        return;
+      case 'cherry-pick':
+        await this.applyFileChanges(file, hash, false);
+        return;
+    }
+  }
+
+  private async applyFileChanges(file: FileChange, hash: string, reverse: boolean): Promise<void> {
+    const detail = await this.detailFor(hash);
+    if (!detail) {
+      return;
+    }
+    const label = reverse ? 'Revert' : 'Apply';
+    const answer = await vscode.window.showWarningMessage(
+      `${label} the changes to ${file.path} from ${shortHash(hash)} in the working tree?`,
+      { modal: true },
+      label
+    );
+    if (answer !== label) {
+      return;
+    }
+    const head = await headOid(this.services.runner, this.repo.root);
+    try {
+      await this.services.writes.applyFilePatch(
+        this.repo.root,
+        hash,
+        detail.parents[detail.parentIndex],
+        file.path,
+        reverse,
+        head
+      );
+      await this.afterWrite();
+      void vscode.window.showInformationMessage(`Git Studio: ${label.toLowerCase()}ed ${file.path}.`);
     } catch (error) {
       void vscode.window.showErrorMessage(`Git Studio: ${errorText(error)}`);
     }
