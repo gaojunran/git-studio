@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.3
+
+- Removed the duplicate filter input; the search box keeps the GitHub-style tokens and the Filters
+  panel keeps structured controls.
+- Toolbar buttons now share one 28px height, including refresh and settings.
+- Filtered history prunes parent lanes that are not in the result set, so `No merges` no longer leaves
+  a huge empty graph gutter that pushed commit subjects off screen.
+
 ## 0.16.2
 
 - Commit menu: Compare with Current Branch, Reword Commit, Copy Commit Message.

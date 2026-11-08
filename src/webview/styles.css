@@ -101,6 +101,20 @@ select {
   gap: 6px;
 }
 
+.toolbar__row .btn {
+  height: 28px;
+}
+
+.toolbar__row .btn--icon {
+  width: 28px;
+  min-width: 28px;
+  font-size: 16px;
+}
+
+.toolbar__row .input {
+  height: 28px;
+}
+
 .toolbar__spacer {
   flex: 1;
 }
@@ -156,11 +170,7 @@ select {
 }
 
 .input--search {
-  flex: 0 1 240px;
-}
-
-.input--filter {
-  flex: 0 1 200px;
+  flex: 0 1 320px;
 }
 
 select.input {

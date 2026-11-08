@@ -5,7 +5,11 @@ interface Lane {
   color: number;
 }
 
-export function layoutGraph(rows: Pick<CommitRow, 'hash' | 'parents'>[]): GraphRow[] {
+export function layoutGraph(
+  rows: Pick<CommitRow, 'hash' | 'parents'>[],
+  options: { pruneMissing?: boolean } = {}
+): GraphRow[] {
+  const visible = options.pruneMissing ? new Set(rows.map((row) => row.hash)) : null;
   const lanes: (Lane | null)[] = [];
   let nextColor = 0;
   const result: GraphRow[] = [];
@@ -29,7 +33,9 @@ export function layoutGraph(rows: Pick<CommitRow, 'hash' | 'parents'>[]): GraphR
     }
 
     const before = lanes.map((entry) => (entry ? { ...entry } : null));
-    const parents = row.parents;
+    const parents = visible
+      ? row.parents.filter((parent) => visible.has(parent))
+      : row.parents;
     const firstParent = parents[0];
 
     if (firstParent) {

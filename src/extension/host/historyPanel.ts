@@ -420,7 +420,18 @@ export class HistoryPanel {
         this.rows = incoming;
         this.rowHashes = new Set(incoming.map((row) => row.hash));
       }
-      this.graph = layoutGraph(this.rows);
+      this.graph = layoutGraph(this.rows, {
+        pruneMissing: Boolean(
+          this.filters.message ||
+            this.filters.author ||
+            this.filters.path ||
+            this.filters.since ||
+            this.filters.until ||
+            this.filters.noMerges ||
+            this.filters.mergesOnly ||
+            this.paths
+        )
+      });
       this.hasMore = result.hasMore && result.rows.length > 0;
       this.consumed = message.append ? this.consumed + result.rows.length : result.rows.length;
 

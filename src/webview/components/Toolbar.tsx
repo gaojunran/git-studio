@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { Filters, RefInfo, RepoSummary, UndoInfo } from '../../shared/protocol';
-import { parseSearchQuery } from '../../shared/search';
 
 interface Props {
   repo: RepoSummary;
@@ -34,7 +33,6 @@ function hasAdvancedFilters(filters: Filters): boolean {
 export function Toolbar(props: Props) {
   const { repo, refs, filters } = props;
   const [expanded, setExpanded] = useState(false);
-  const [filterValue, setFilterValue] = useState('');
   const linear = filters.firstParent && filters.noMerges;
 
   const selectedNames = filters.refs.map((name) =>
@@ -68,28 +66,6 @@ export function Toolbar(props: Props) {
           title="Search syntax: author:, path:, since:, until:, is:merge, is:no-merge, hash:, regex:true, case:true"
           value={filters.message}
           onChange={(event) => props.onChange({ message: event.target.value })}
-          spellCheck={false}
-        />
-
-        <input
-          className="input input--filter"
-          placeholder="Filter: author:, path:, is:merge…"
-          title="Filter by metadata: author:, path:, since:, until:, is:merge, is:no-merge, first-parent:true"
-          value={filterValue}
-          onChange={(event) => {
-            const value = event.target.value;
-            setFilterValue(value);
-            const parsed = parseSearchQuery(value);
-            props.onChange({
-              author: parsed.author ?? '',
-              path: parsed.path ?? '',
-              since: parsed.since ?? '',
-              until: parsed.until ?? '',
-              noMerges: Boolean(parsed.noMerges),
-              mergesOnly: Boolean(parsed.mergesOnly),
-              firstParent: Boolean(parsed.firstParent)
-            });
-          }}
           spellCheck={false}
         />
 

@@ -68,4 +68,17 @@ describe('layoutGraph', () => {
     expect(roots.map((row) => row.lane)).toEqual([0, 0]);
     expect(roots[1].color).toBe(1);
   });
+
+  it('drops parents outside a filtered result set instead of growing lanes', () => {
+    const rows = layoutGraph(
+      [
+        { hash: 'a', parents: ['merge'] },
+        { hash: 'b', parents: ['c'] },
+        { hash: 'c', parents: [] }
+      ],
+      { pruneMissing: true }
+    );
+    expect(rows.map((row) => row.lane)).toEqual([0, 0, 0]);
+    expect(Math.max(...rows.flatMap((row) => row.segments.map((segment) => segment.to)))).toBeLessThan(2);
+  });
 });
