@@ -12,6 +12,7 @@ describe('buildLogArgs', () => {
   it('uses -L for a line range instead of a pathspec', () => {
     const args = buildLogArgs({ refs: [], path: 'src/a.ts', lineRange: '10,20', follow: true, skip: 0, limit: 50 });
     expect(args).toContain('-L10,20:src/a.ts');
+    expect(args).toContain('--no-patch');
     expect(args).not.toContain('--follow');
     expect(args).not.toContain('--');
   });

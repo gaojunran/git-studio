@@ -22,6 +22,7 @@ import { worktreeWorkbench } from './features/worktree';
 import { applyPatch, exportGraph, exportPatch } from './features/export';
 import { compareReflogEntry, reflogUndo, reflogWorkbench } from './features/reflog';
 import { HistoryPanel } from './host/historyPanel';
+import { registerScmViews } from './scmViews/views';
 import { stashWorkbench } from './features/stash';
 import { Journal } from './host/journal';
 import { RepoService } from './host/repoService';
@@ -108,6 +109,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   updateContext();
 
   context.subscriptions.push(
+    registerScmViews(context, services),
     output,
     repoService,
     annotate,

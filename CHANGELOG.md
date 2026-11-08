@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.23.1
+
+- Clicking a commit in File History or Line History opens the native diff for that file instead of the
+  History panel; a commit in **Commits** opens the whole commit as a native multi-file diff.
+- File and line views remember the last file editor even while the Source Control sidebar has focus,
+  and fall back to visible file editors, so they no longer go blank when the sidebar is active.
+
+## 0.23.0
+
+- Source Control sidebar gains three native views: **File History**, **Line History** and **Commits**.
+- File History follows renames for the active file; Line History uses `git log -L` for the current
+  selection or cursor line; clicking a commit opens the native diff for that file, while a row in
+  **Commits** opens the whole commit as a native multi-file diff.
+- Commits lists the current branch linearly, can include or exclude merge commits, paginates with
+  **Load more**, and supports message, author, path, date, order, first-parent and merge filters from
+  its title bar.
+- Line-range history now passes `--no-patch` so commit records parse correctly instead of swallowing
+  diff text.
+
 ## 0.22.2
 
 - Split Git Studio's Source Control actions by semantics: Changes keeps the working-tree compare, and

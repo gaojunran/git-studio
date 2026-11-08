@@ -106,6 +106,7 @@ export function buildLogArgs(query: LogQuery): string[] {
   }
 
   if (query.lineRange) {
+    args.push('--no-patch');
     args.push(query.refs.find((ref) => ref === 'HEAD') ?? query.refs[0] ?? 'HEAD');
   } else if (query.hash) {
     args.push(`${query.hash}^!`);

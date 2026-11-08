@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.22.2",
+  "version": "0.23.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -23,7 +23,11 @@
   "extensionKind": [
     "workspace"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:gitStudio.scm.fileHistory",
+    "onView:gitStudio.scm.lineHistory",
+    "onView:gitStudio.scm.commits"
+  ],
   "contributes": {
     "commands": [
       {
@@ -233,6 +237,53 @@
         "title": "Refresh",
         "category": "Git Studio",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "gitStudio.scm.openCommit",
+        "title": "Open Changes in Diff Editor",
+        "category": "Git Studio",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitStudio.scm.fileHistory.refresh",
+        "title": "Refresh File History",
+        "category": "Git Studio",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitStudio.scm.lineHistory.refresh",
+        "title": "Refresh Line History",
+        "category": "Git Studio",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitStudio.scm.commits.refresh",
+        "title": "Refresh Commits",
+        "category": "Git Studio",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitStudio.scm.commits.toggleMerges",
+        "title": "Toggle Merge Commits",
+        "category": "Git Studio",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitStudio.scm.commits.filter",
+        "title": "Filter Commits…",
+        "category": "Git Studio",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "gitStudio.scm.commits.loadMore",
+        "title": "Load More Commits",
+        "category": "Git Studio"
+      },
+      {
+        "command": "gitStudio.scm.commits.clearFilters",
+        "title": "Clear Commit Filters",
+        "category": "Git Studio",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -380,6 +431,38 @@
           "when": "scmProvider == git",
           "group": "6_refcompare@4"
         }
+      ],
+      "view/title": [
+        {
+          "command": "gitStudio.scm.fileHistory.refresh",
+          "when": "view == gitStudio.scm.fileHistory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitStudio.scm.lineHistory.refresh",
+          "when": "view == gitStudio.scm.lineHistory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitStudio.scm.commits.toggleMerges",
+          "when": "view == gitStudio.scm.commits",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitStudio.scm.commits.filter",
+          "when": "view == gitStudio.scm.commits",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitStudio.scm.commits.refresh",
+          "when": "view == gitStudio.scm.commits",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitStudio.scm.commits.clearFilters",
+          "when": "view == gitStudio.scm.commits",
+          "group": "navigation@4"
+        }
       ]
     },
     "keybindings": [
@@ -513,6 +596,25 @@
           "description": "Path to the git executable. Empty uses the path resolved by the built-in Git extension."
         }
       }
+    },
+    "views": {
+      "scm": [
+        {
+          "id": "gitStudio.scm.fileHistory",
+          "name": "File History",
+          "when": "gitStudio.hasRepo"
+        },
+        {
+          "id": "gitStudio.scm.lineHistory",
+          "name": "Line History",
+          "when": "gitStudio.hasRepo"
+        },
+        {
+          "id": "gitStudio.scm.commits",
+          "name": "Commits",
+          "when": "gitStudio.hasRepo"
+        }
+      ]
     }
   },
   "scripts": {

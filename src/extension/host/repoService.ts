@@ -140,7 +140,8 @@ export class RepoService {
 
   /** Active editor's repository, then the SCM-selected repository, then the only repository. */
   active(): RepoHandle | undefined {
-    const editor = vscode.window.activeTextEditor;
+    const editor = vscode.window.activeTextEditor
+      ?? vscode.window.visibleTextEditors.find((candidate) => candidate.document.uri.scheme === 'file');
     if (editor) {
       const fromEditor = this.forUri(editor.document.uri);
       if (fromEditor) {

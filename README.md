@@ -24,6 +24,12 @@ place to learn and one source of truth for repository state.
   unpushed commits carry a dot.
 - **All repositories** in the toolbar merges every workspace repository into one date-ordered list with
   a colored repository badge; selecting a row switches the panel to that repository.
+- Native Source Control sidebar views: **File History**, **Line History** and **Commits**. File History
+  follows renames for the active file; Line History uses `git log -L` for the selection or cursor line.
+  Clicking a commit opens the native diff for that file; clicking a row in Commits opens the whole
+  commit as a native multi-file diff.
+- **Commits** lists the current branch linearly with a merge-commit toggle, pagination and filters for
+  message, author, path, date range, order, first-parent and merge commits.
 - Bounded loading: 500 commits per page, with virtual scrolling and incremental graph layout.
 - Commit details: full message, parents, author and committer identity, authored and committed
   timestamps, GPG signature, refs pointing at the commit, changed files with per-file stats.
