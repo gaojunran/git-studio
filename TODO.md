@@ -1,6 +1,6 @@
 # Git Studio — TODO
 
-> 当前版本：`0.21.0`
+> 当前版本：`0.21.1`
 > 定位：IntelliJ Log 风格的 Git 历史工作台。History 用 WebView，其余尽量复用 VS Code 原生 UI。
 
 ## 已完成（基线）
@@ -27,7 +27,7 @@
 - [x] Reflog 工作台：HEAD / 分支 reflog、查看、与 HEAD / 任意 ref 对比、reset --hard、在新分支恢复
 - [x] Worktree 工作台：列表、dirty、当前/新窗口打开、创建、remove、prune
 - [x] 多仓库：History 面板内快速切换
-- [x] Branches 侧栏：收藏、本地/远程/tag 分组、ahead/behind、checkout/create/rename/delete/merge/rebase/favorite
+- [x] Branches 侧栏已实现但暂时隐藏（组件与宿主 action 保留，UI 引用已移除）
 - [x] 列配置：graph / subject / refs / author / date / hash，author/commit 时间切换
 - [x] 视觉标记：自己的提交加粗、当前分支底色、merge 灰显、未推送圆点
 - [x] 多仓库统一 Log：按时间合并所有仓库、repo 徽标、选中后切换仓库

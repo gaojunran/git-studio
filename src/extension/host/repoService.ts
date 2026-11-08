@@ -18,6 +18,7 @@ export interface GitRepositoryLike {
     readonly remotes: { readonly name: string; readonly fetchUrl?: string; readonly pushUrl?: string }[];
     readonly onDidChange: vscode.Event<void>;
   };
+  readonly ui?: { readonly selected: boolean };
   status(): Promise<void>;
   readonly onDidCommit: vscode.Event<void>;
   readonly onDidCheckout: vscode.Event<void>;
@@ -132,11 +133,38 @@ export class RepoService {
     return this.list().find((candidate) => candidate.repo.rootUri.toString() === root);
   }
 
+  /** Repository selected in the built-in Source Control view. */
+  selected(): RepoHandle | undefined {
+    return this.list().find((handle) => handle.repo.ui?.selected);
+  }
+
+  /** Active editor's repository, then the SCM-selected repository, then the only repository. */
+  active(): RepoHandle | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const fromEditor = this.forUri(editor.document.uri);
+      if (fromEditor) {
+        return fromEditor;
+      }
+    }
+    const selected = this.selected();
+    if (selected) {
+      return selected;
+    }
+    const repos = this.list();
+    return repos.length === 1 ? repos[0] : undefined;
+  }
+
   async pick(uri?: vscode.Uri): Promise<RepoHandle | undefined> {
     await this.ensureActive();
     const fromUri = uri ? this.forUri(uri) : undefined;
     if (fromUri) {
       return fromUri;
+    }
+
+    const auto = this.active();
+    if (auto) {
+      return auto;
     }
 
     const repos = this.list();

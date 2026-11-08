@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.1
+
+- Removed the Branches sidebar from the history panel; its component and host actions stay in the
+  codebase for later reuse.
+- `All repositories` is now a toolbar toggle instead of a sidebar switch.
+- The current repository is resolved automatically: active editor repository first, then the repository
+  selected in the built-in Source Control view, then the only repository. The picker only appears when
+  none of those resolve.
+
 ## 0.21.0
 
 - Branches sidebar with favorites, local/remote/tag groups, ahead/behind counts and row actions

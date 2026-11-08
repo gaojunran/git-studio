@@ -12,6 +12,7 @@ interface Props {
   onChange: (patch: Partial<Filters>) => void;
   onReset: () => void;
   onPickRepo: () => void;
+  onToggleAllRepos: (enabled: boolean) => void;
   onPickRefs: () => void;
   onRefresh: () => void;
   onUndo: () => void;
@@ -95,14 +96,17 @@ export function Toolbar(props: Props) {
           {repo.detached ? <span className="muted">detached</span> : repo.branch ? <span className="muted">{repo.branch}</span> : null}
         </button>
 
-        {props.allRepos && (
-          <span
-            className="toolbar__chip"
-            title={props.repoCount > 1 ? `Showing commits from ${props.repoCount} repositories` : 'Showing commits from all repositories'}
-          >
-            All repositories
-          </span>
-        )}
+        <button
+          className={`btn ${props.allRepos ? 'btn--active' : ''}`}
+          onClick={() => props.onToggleAllRepos(!props.allRepos)}
+          title={
+            props.allRepos
+              ? `Showing commits from ${props.repoCount} repositories — click to show only ${repo.name}`
+              : 'Show commits from every repository in this workspace'
+          }
+        >
+          All repos
+        </button>
 
         <button className="btn" onClick={props.onPickRefs} title={refTitle}>
           {refLabel}

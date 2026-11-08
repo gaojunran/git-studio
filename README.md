@@ -18,14 +18,12 @@ place to learn and one source of truth for repository state.
   `No merges` filter instead of dropping whole merged branches.
 - A **Collapse** toggle hides interior commits of linear side branches and keeps their merge points,
   branch heads and tags.
-- A **Branches** sidebar lists favorites, local and remote branches and tags with ahead/behind counts;
-  click to check out, star to favorite, or use the row menu to create, rename, delete, merge or rebase.
 - **Columns** controls which of graph, subject, refs, author, date and hash are shown, and the Date
   column can switch between author time and commit time.
 - Visual markers: your own commits are bold, the current branch is tinted, merge commits are muted and
   unpushed commits carry a dot.
-- **All repositories** merges every workspace repository into one date-ordered list with a colored
-  repository badge; selecting a row switches the panel to that repository.
+- **All repositories** in the toolbar merges every workspace repository into one date-ordered list with
+  a colored repository badge; selecting a row switches the panel to that repository.
 - Bounded loading: 500 commits per page, with virtual scrolling and incremental graph layout.
 - Commit details: full message, parents, author and committer identity, authored and committed
   timestamps, GPG signature, refs pointing at the commit, changed files with per-file stats.
@@ -196,7 +194,6 @@ provider can reply to existing threads.
 | `gitStudio.history.defaultRefs` | `primary` | `primary` = current branch, its upstream, main/master/develop and pinned refs. `current` = current branch only. `all` = every ref. |
 | `gitStudio.history.recentRefLimit` | `0` | Extra recently updated local branches to add in `primary` mode. |
 | `gitStudio.history.pinnedRefs` | `[]` | Ref names or globs always included, e.g. `release/*`, `origin/main`. |
-| `gitStudio.history.favoriteRefs` | `[]` | Refs starred in the Branches sidebar. |
 | `gitStudio.history.columns` | `graph, subject, refs, author, date` | Columns shown in the commit list. |
 | `gitStudio.history.timeField` | `author` | `author` or `commit` timestamp for the Date column. |
 | `gitStudio.history.order` | `date` | `date` or `topo` ordering. |

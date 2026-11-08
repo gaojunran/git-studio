@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   CommitDetail,
   CommitItemLink,
@@ -9,13 +9,11 @@ import type {
   HostMessage,
   InitState,
   RebasePlan,
-  RefInfo,
   UndoInfo
 } from '../shared/protocol';
 import { getState, post, setState } from './vscode';
 import { Toolbar } from './components/Toolbar';
 import { CommitList } from './components/CommitList';
-import { BranchesSidebar, type BranchAction } from './components/BranchesSidebar';
 import { DetailPane } from './components/DetailPane';
 import { RebaseDialog } from './components/RebaseDialog';
 
@@ -54,7 +52,6 @@ export function App() {
   const [columns, setColumns] = useState<HistoryColumn[]>(COLUMN_ORDER);
   const [timeField, setTimeField] = useState<'author' | 'commit'>('author');
   const [allRepos, setAllRepos] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>([]);
 
   const pageSizeRef = useRef(500);
   const requestIdRef = useRef(0);
@@ -106,7 +103,6 @@ export function App() {
           setColumns(normalizeColumns(message.state.columns));
           setTimeField(message.state.timeField);
           setAllRepos(message.state.allRepos);
-          setFavorites(message.state.favorites ?? []);
           pageSizeRef.current = message.state.pageSize;
           const persisted = getState<PersistedState>();
           const usable = !initializedRef.current && persisted && persisted.root === message.state.repo.root
@@ -303,17 +299,6 @@ export function App() {
     post({ type: 'setAllRepos', enabled });
   };
 
-  const branchAction = (action: BranchAction, ref: RefInfo) => {
-    if (action === 'favorite') {
-      setFavorites((previous) =>
-        previous.includes(ref.name) ? previous.filter((name) => name !== ref.name) : [...previous, ref.name]
-      );
-    }
-    post({ type: 'branchAction', action, ref: ref.name });
-  };
-
-  const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
-
   const resetFilters = () => {
     if (!filters) {
       return;
@@ -348,6 +333,7 @@ export function App() {
         timeField={timeField}
         allRepos={allRepos}
         repoCount={Math.max(1, init.repos.length)}
+        onToggleAllRepos={changeAllRepos}
         onChange={changeFilters}
         onReset={resetFilters}
         onPickRepo={() => post({ type: 'pickerRepo' })}
@@ -402,14 +388,6 @@ export function App() {
       )}
 
       <div className="main">
-        <BranchesSidebar
-          refs={init.refs}
-          favorites={favoriteSet}
-          currentBranch={init.currentBranch ?? init.repo.branch}
-          allRepos={allRepos}
-          onAllRepos={changeAllRepos}
-          onAction={branchAction}
-        />
         <CommitList
           rows={rows}
           graph={graph}
