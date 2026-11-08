@@ -87,6 +87,16 @@ describe('buildLogArgs', () => {
     expect(args[args.length - 1]).toBe(':(literal)src/a.ts');
   });
 
+  it('supports merge-only and hash lookups', () => {
+    const merges = buildLogArgs({ refs: [], mergesOnly: true, skip: 0, limit: 10 });
+    expect(merges).toContain('--merges');
+    expect(merges).not.toContain('--no-merges');
+
+    const hash = buildLogArgs({ refs: [], hash: 'abc1234', skip: 0, limit: 10 });
+    expect(hash).toContain('abc1234^!');
+    expect(hash).not.toContain('--all');
+  });
+
   it('uses refs instead of --all and fixed strings by default', () => {
     const args = buildLogArgs({
       refs: ['refs/heads/main'],

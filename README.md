@@ -11,6 +11,10 @@ place to learn and one source of truth for repository state.
 
 - Multi-ref commit graph (local branches, remotes, tags, detached HEAD) in an editor panel.
 - History filters: message (plain or regex), author, path, date range, ref selection, ordering.
+  The search box accepts GitHub-style tokens: `author:`, `path:`, `since:`, `until:`, `hash:`,
+  `is:merge`, `is:no-merge`, `first-parent:`, `regex:`, `case:`. A separate filter box applies the
+  metadata tokens without changing the message search.
+- A **Linear** toggle restricts the graph to the first-parent line without merge commits.
 - Bounded loading: 500 commits per page, with virtual scrolling and incremental graph layout.
 - Commit details: full message, parents, author/committer, changed files with per-file stats.
 - Merge commits: switch the diff base between parent 1 and parent 2.
@@ -35,8 +39,9 @@ place to learn and one source of truth for repository state.
 - Detached HEAD (jj workflows) is handled: the merge-base command resolves the only branch containing
   HEAD, and asks when several branches match instead of failing.
 - Commit actions from the detail pane or a row right-click:
-  create branch here, create tag here, checkout (detached), compare with working tree,
-  open on GitHub/GitLab/Bitbucket, copy subject or hash.
+  create branch here, create tag here, checkout (detached), compare with current branch,
+  compare with working tree, open on GitHub/GitLab/Bitbucket, copy subject, message or hash.
+- Reword any commit on the current first-parent line from the same menu.
 - History rewriting: reset (soft/mixed/hard), revert and cherry-pick from the same menu.
   Merge commits use parent 1. Conflicts surface in a banner with Abort action.
 - Interactive rebase from any ancestor commit: reorder, pick, reword, edit, squash, fixup, drop.

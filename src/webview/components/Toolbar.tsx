@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Filters, RefInfo, RepoSummary, UndoInfo } from '../../shared/protocol';
+import { parseSearchQuery } from '../../shared/search';
 
 interface Props {
   repo: RepoSummary;
@@ -25,6 +26,7 @@ function hasAdvancedFilters(filters: Filters): boolean {
       filters.caseSensitive ||
       filters.firstParent ||
       filters.noMerges ||
+      filters.mergesOnly ||
       filters.order !== 'date'
   );
 }
@@ -32,6 +34,8 @@ function hasAdvancedFilters(filters: Filters): boolean {
 export function Toolbar(props: Props) {
   const { repo, refs, filters } = props;
   const [expanded, setExpanded] = useState(false);
+  const [filterValue, setFilterValue] = useState('');
+  const linear = filters.firstParent && filters.noMerges;
 
   const selectedNames = filters.refs.map((name) =>
     refs.find((ref) => ref.name === name)?.shortName ??
@@ -60,14 +64,44 @@ export function Toolbar(props: Props) {
 
         <input
           className="input input--search"
-          placeholder="Search commits…"
+          placeholder="Search commits… (author:, path:, is:merge)"
+          title="Search syntax: author:, path:, since:, until:, is:merge, is:no-merge, hash:, regex:true, case:true"
           value={filters.message}
           onChange={(event) => props.onChange({ message: event.target.value })}
           spellCheck={false}
         />
 
+        <input
+          className="input input--filter"
+          placeholder="Filter: author:, path:, is:merge…"
+          title="Filter by metadata: author:, path:, since:, until:, is:merge, is:no-merge, first-parent:true"
+          value={filterValue}
+          onChange={(event) => {
+            const value = event.target.value;
+            setFilterValue(value);
+            const parsed = parseSearchQuery(value);
+            props.onChange({
+              author: parsed.author ?? '',
+              path: parsed.path ?? '',
+              since: parsed.since ?? '',
+              until: parsed.until ?? '',
+              noMerges: Boolean(parsed.noMerges),
+              mergesOnly: Boolean(parsed.mergesOnly),
+              firstParent: Boolean(parsed.firstParent)
+            });
+          }}
+          spellCheck={false}
+        />
+
         <span className="toolbar__spacer" />
 
+        <button
+          className={`btn ${linear ? 'btn--active' : ''}`}
+          onClick={() => props.onChange({ firstParent: !linear, noMerges: !linear })}
+          title="Show only the first-parent line without merge commits"
+        >
+          Linear
+        </button>
         <button
           className={`btn ${expanded || hasAdvancedFilters(filters) ? 'btn--active' : ''}`}
           onClick={() => setExpanded((value) => !value)}
@@ -170,6 +204,15 @@ export function Toolbar(props: Props) {
               onChange={(event) => props.onChange({ noMerges: event.target.checked })}
             />
             No merges
+          </label>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={filters.mergesOnly}
+              onChange={(event) => props.onChange({ mergesOnly: event.target.checked })}
+            />
+            Merges only
           </label>
 
           <label className="field">

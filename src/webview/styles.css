@@ -156,7 +156,11 @@ select {
 }
 
 .input--search {
-  flex: 0 1 260px;
+  flex: 0 1 240px;
+}
+
+.input--filter {
+  flex: 0 1 200px;
 }
 
 select.input {
@@ -203,7 +207,13 @@ select.input {
 
 .btn--icon {
   width: 24px;
+  min-width: 24px;
+  height: 24px;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   text-align: center;
   font-size: 13px;
 }
@@ -399,14 +409,22 @@ select.input {
   color: var(--vscode-button-foreground);
 }
 
+.ref--local {
+  background: color-mix(in srgb, var(--vscode-textLink-foreground) 22%, transparent);
+  color: var(--vscode-textLink-foreground);
+  border: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground) 55%, transparent);
+}
+
 .ref--remote {
-  opacity: 0.8;
+  background: transparent;
+  border: 1px dashed var(--vscode-badge-background);
+  color: var(--vscode-descriptionForeground);
 }
 
 .ref--tag {
   background: transparent;
-  border: 1px solid var(--vscode-badge-background);
-  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
 }
 
 .ref--more {
@@ -459,7 +477,8 @@ select.input {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .detail--empty {
@@ -475,6 +494,10 @@ select.input {
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--vscode-panel-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--vscode-editor-background);
 }
 
 .detail__hash {
@@ -565,8 +588,7 @@ select.input {
 }
 
 .files {
-  flex: 1;
-  overflow-y: auto;
+  flex: none;
   min-height: 0;
   padding-bottom: 4px;
 }

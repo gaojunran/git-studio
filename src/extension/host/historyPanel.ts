@@ -18,6 +18,7 @@ import { loadRefs } from '../git/refs';
 import { detectOperation, headOid, isConflict } from '../git/write';
 import { selectDefaultRefs, type DefaultRefMode } from '../history/defaultRefs';
 import { layoutGraph } from '../graph/layout';
+import { parseSearchQuery } from '../../shared/search';
 import { CommitActionRunner } from './actions';
 import { renderHtml } from './html';
 import type { RepoHandle } from './repoService';
@@ -43,6 +44,7 @@ function emptyFilters(): Filters {
     caseSensitive: false,
     firstParent: false,
     noMerges: false,
+    mergesOnly: false,
     since: '',
     until: '',
     order: vscode.workspace.getConfiguration('gitStudio').get<'date' | 'topo'>('history.order', 'date')
@@ -379,19 +381,22 @@ export class HistoryPanel {
     this.post({ type: 'busy', busy: true });
     try {
       const stale = await this.checkStale(signal);
+      const search = parseSearchQuery(this.filters.message);
       const query: LogQuery = {
         refs: this.filters.refs,
-        path: this.paths ? undefined : this.filters.path || undefined,
+        path: this.paths ? undefined : this.filters.path || search.path || undefined,
         paths: this.paths,
-        follow: Boolean(!this.paths && this.filters.path && this.filePath),
-        author: this.filters.author || undefined,
-        message: this.filters.message || undefined,
-        regex: this.filters.regex,
-        caseSensitive: this.filters.caseSensitive,
-        firstParent: this.filters.firstParent,
-        noMerges: this.filters.noMerges,
-        since: this.filters.since || undefined,
-        until: this.filters.until || undefined,
+        follow: Boolean(!this.paths && (this.filters.path || search.path) && this.filePath),
+        author: this.filters.author || search.author,
+        message: search.text || undefined,
+        hash: search.hash,
+        regex: this.filters.regex || Boolean(search.regex),
+        caseSensitive: this.filters.caseSensitive || Boolean(search.caseSensitive),
+        firstParent: this.filters.firstParent || Boolean(search.firstParent),
+        noMerges: this.filters.noMerges || Boolean(search.noMerges),
+        mergesOnly: this.filters.mergesOnly || Boolean(search.mergesOnly),
+        since: this.filters.since || search.since || undefined,
+        until: this.filters.until || search.until || undefined,
         order: this.filters.order,
         skip,
         limit

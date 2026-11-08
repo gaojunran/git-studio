@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { CommitDetail, RebasePlan } from '../../shared/protocol';
 import { loadWorktreeFiles } from '../git/diff';
 import { buildRebasePlan } from '../git/rebase';
+import { openRefDiff } from '../features/diffs';
 import { commitUrl, pickRemoteUrl } from '../git/remote';
 import { detectOperation, headOid, isConflict, type Operation } from '../git/write';
 import type { RepoHandle } from './repoService';
@@ -12,13 +13,16 @@ type ActionId =
   | 'branch'
   | 'tag'
   | 'checkout'
+  | 'compare-current'
   | 'worktree'
   | 'remote'
   | 'copy-subject'
+  | 'copy-message'
   | 'copy-hash'
   | 'reset'
   | 'revert'
   | 'cherry-pick'
+  | 'reword'
   | 'rebase'
   | 'abort';
 
@@ -52,10 +56,12 @@ export class CommitActionRunner {
       { id: 'branch', label: '$(git-branch) Create Branch Here…' },
       { id: 'tag', label: '$(tag) Create Tag Here…' },
       { id: 'checkout', label: '$(debug-disconnect) Checkout Commit (Detached)…' },
+      { id: 'compare-current', label: '$(git-compare) Compare with Current Branch' },
       { kind: vscode.QuickPickItemKind.Separator, label: 'Rewrite' },
       { id: 'reset', label: '$(discard) Reset Current Branch to Here…' },
       { id: 'revert', label: '$(history) Revert Commit…' },
       { id: 'cherry-pick', label: '$(git-commit) Cherry-pick onto Current Branch…' },
+      { id: 'reword', label: '$(edit) Reword Commit…' },
       { id: 'rebase', label: '$(git-pull-request) Interactively Rebase from Here…' }
     ];
 
@@ -71,6 +77,7 @@ export class CommitActionRunner {
       { id: 'worktree', label: '$(diff) Compare with Working Tree' },
       { id: 'remote', label: '$(globe) Open Commit on Remote' },
       { id: 'copy-subject', label: '$(copy) Copy Commit Subject' },
+      { id: 'copy-message', label: '$(copy) Copy Commit Message' },
       { id: 'copy-hash', label: '$(copy) Copy Commit Hash' }
     );
 
@@ -102,6 +109,9 @@ export class CommitActionRunner {
         case 'checkout':
           await this.checkout(hash);
           break;
+        case 'compare-current':
+          await openRefDiff(this.services, this.getRepo(), hash, 'HEAD', `${shortHash(hash)} ↔ HEAD`);
+          break;
         case 'worktree':
           await this.compareWithWorktree(hash);
           break;
@@ -110,6 +120,9 @@ export class CommitActionRunner {
           break;
         case 'copy-subject':
           await vscode.env.clipboard.writeText(detail?.message.split('\n')[0] ?? '');
+          break;
+        case 'copy-message':
+          await vscode.env.clipboard.writeText(detail?.message ?? '');
           break;
         case 'copy-hash':
           await vscode.env.clipboard.writeText(hash);
@@ -122,6 +135,9 @@ export class CommitActionRunner {
           break;
         case 'cherry-pick':
           await this.cherryPick(hash, detail);
+          break;
+        case 'reword':
+          await this.reword(hash, detail);
           break;
         case 'rebase':
           await this.openRebase(hash);
@@ -301,6 +317,46 @@ export class CommitActionRunner {
     await this.record(`cherry-pick ${shortHash(hash)}`, head);
     await this.onChanged();
     void vscode.window.showInformationMessage(`Git Studio: cherry-picked ${shortHash(hash)} onto ${branch}.`);
+  }
+
+  private async reword(hash: string, detail: CommitDetail | undefined): Promise<void> {
+    const repo = this.getRepo();
+    const parent = detail?.parents[0];
+    if (!parent) {
+      void vscode.window.showErrorMessage('Git Studio: a root commit cannot be reworded this way.');
+      return;
+    }
+
+    const lines = (detail?.message ?? '').split('\n');
+    const current = lines[0] ?? '';
+    const subject = await vscode.window.showInputBox({
+      prompt: `New subject for ${shortHash(hash)}`,
+      value: current,
+      validateInput: (value) => (value.trim() ? undefined : 'Subject is required')
+    });
+    if (subject === undefined || subject.trim() === current) {
+      return;
+    }
+
+    const plan = await buildRebasePlan(this.services.runner, repo.root, parent);
+    if (plan.error) {
+      throw new Error(plan.error);
+    }
+    const item = plan.items.find((candidate) => candidate.hash === hash);
+    if (!item) {
+      throw new Error('The commit is not on the current first-parent line.');
+    }
+
+    const before = plan.head;
+    item.action = 'reword';
+    item.message = [subject.trim(), ...lines.slice(1)].join('\n').trim();
+
+    const result = await this.services.writes.rebase(repo.root, plan, before);
+    await this.record(`reword ${shortHash(hash)}`, before);
+    await this.onChanged();
+    if (result === 'stopped') {
+      void vscode.window.showWarningMessage('Git Studio: the reword stopped on a conflict. Resolve it, then Continue or Abort.');
+    }
   }
 
   private async abort(): Promise<void> {

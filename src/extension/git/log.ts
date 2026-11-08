@@ -8,6 +8,8 @@ export interface LogQuery {
   follow?: boolean;
   author?: string;
   message?: string;
+  hash?: string;
+  mergesOnly?: boolean;
   regex?: boolean;
   caseSensitive?: boolean;
   firstParent?: boolean;
@@ -77,6 +79,9 @@ export function buildLogArgs(query: LogQuery): string[] {
   if (query.noMerges) {
     args.push('--no-merges');
   }
+  if (query.mergesOnly) {
+    args.push('--merges');
+  }
   if (query.author?.trim()) {
     args.push(`--author=${query.author.trim()}`);
   }
@@ -99,7 +104,11 @@ export function buildLogArgs(query: LogQuery): string[] {
     }
   }
 
-  args.push(...(query.refs.length > 0 ? query.refs : ['--all']));
+  if (query.hash) {
+    args.push(`${query.hash}^!`);
+  } else {
+    args.push(...(query.refs.length > 0 ? query.refs : ['--all']));
+  }
   args.push(`--max-count=${Math.max(1, query.limit + 1)}`);
   args.push(`--skip=${Math.max(0, query.skip)}`);
   args.push(`--format=${logFormat()}`);

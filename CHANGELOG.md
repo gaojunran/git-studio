@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.2
+
+- Commit menu: Compare with Current Branch, Reword Commit, Copy Commit Message.
+- History: Linear toggle (first parent, no merges); GitHub-style search tokens and a metadata filter
+  box; local, remote and tag badges now use distinct colors.
+- Detail panel scrolls as a whole; toolbar icon buttons share one height.
+
 ## 0.16.1
 
 - Ref picker: show each commit's subject next to its hash; merge local and remote branches into one
