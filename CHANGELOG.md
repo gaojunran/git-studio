@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.0
+
+- Branches sidebar with favorites, local/remote/tag groups, ahead/behind counts and row actions
+  (checkout, create, rename, delete, merge, rebase, favorite).
+- Configurable commit columns and an author-time / commit-time switch for the Date column.
+- Visual markers: own commits bold, current branch tinted, merge commits muted, unpushed commits
+  dotted.
+- All repositories view: date-ordered merge of every workspace repository with repository badges;
+  selecting a row switches the panel to that repository.
+
 ## 0.20.2
 
 - Fixed `More than one commit to dig from` on line-range history: `-L` queries now pass a single

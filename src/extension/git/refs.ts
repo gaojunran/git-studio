@@ -16,7 +16,7 @@ export function parseRefs(stdout: string): RefInfo[] {
     if (!record) {
       continue;
     }
-    const [name = '', oid = '', upstream = '', head = '', committerDate = '0', subject = ''] = record.split(FIELD);
+    const [name = '', oid = '', upstream = '', head = '', committerDate = '0', subject = '', track = ''] = record.split(FIELD);
     if (!name || !oid) {
       continue;
     }
@@ -39,6 +39,8 @@ export function parseRefs(stdout: string): RefInfo[] {
       continue;
     }
 
+    const ahead = /ahead (\d+)/.exec(track)?.[1];
+    const behind = /behind (\d+)/.exec(track)?.[1];
     refs.push({
       name,
       shortName,
@@ -47,7 +49,9 @@ export function parseRefs(stdout: string): RefInfo[] {
       committerDate: Number(committerDate) || 0,
       upstream: upstream || undefined,
       subject: subject || undefined,
-      current: head === '*'
+      current: head === '*',
+      ahead: ahead === undefined ? undefined : Number(ahead),
+      behind: behind === undefined ? undefined : Number(behind)
     });
   }
 
@@ -68,7 +72,7 @@ export async function loadRefs(
   const stdout = await runner.run(
     [
       'for-each-ref',
-      `--format=%(refname)${FIELD}%(objectname)${FIELD}%(upstream:short)${FIELD}%(HEAD)${FIELD}%(committerdate:unix)${FIELD}%(subject)${RECORD}`,
+      `--format=%(refname)${FIELD}%(objectname)${FIELD}%(upstream:short)${FIELD}%(HEAD)${FIELD}%(committerdate:unix)${FIELD}%(subject)${FIELD}%(upstream:track)${RECORD}`,
       'refs/heads',
       'refs/remotes',
       'refs/tags'

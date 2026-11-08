@@ -1,24 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CommitDetail,
   CommitItemLink,
   CommitRow,
   Filters,
   GraphRow,
+  HistoryColumn,
   HostMessage,
   InitState,
   RebasePlan,
+  RefInfo,
   UndoInfo
 } from '../shared/protocol';
 import { getState, post, setState } from './vscode';
 import { Toolbar } from './components/Toolbar';
 import { CommitList } from './components/CommitList';
+import { BranchesSidebar, type BranchAction } from './components/BranchesSidebar';
 import { DetailPane } from './components/DetailPane';
 import { RebaseDialog } from './components/RebaseDialog';
 
 interface PersistedState {
   root: string;
   filters: Filters;
+}
+
+const COLUMN_ORDER: HistoryColumn[] = ['graph', 'subject', 'refs', 'author', 'date', 'hash'];
+
+function normalizeColumns(columns: HistoryColumn[] | undefined): HistoryColumn[] {
+  const source = columns ?? (['graph', 'subject', 'refs', 'author', 'date'] as HistoryColumn[]);
+  return COLUMN_ORDER.filter((column) => source.includes(column));
 }
 
 export function App() {
@@ -41,6 +51,10 @@ export function App() {
   const [preview, setPreview] = useState<{ path: string; patch: string; error?: string } | null>(null);
   const [compare, setCompare] = useState<string | null>(null);
   const [focusHash, setFocusHash] = useState<string | null>(null);
+  const [columns, setColumns] = useState<HistoryColumn[]>(COLUMN_ORDER);
+  const [timeField, setTimeField] = useState<'author' | 'commit'>('author');
+  const [allRepos, setAllRepos] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
 
   const pageSizeRef = useRef(500);
   const requestIdRef = useRef(0);
@@ -51,6 +65,7 @@ export function App() {
   const filtersRef = useRef<Filters | null>(null);
   const selectedRef = useRef<string | null>(null);
   const parentIndexRef = useRef(0);
+  const repoRootRef = useRef<string | undefined>(undefined);
   const initializedRef = useRef(false);
   const runQueryRef = useRef<(next: Filters, append: boolean) => void>(() => undefined);
 
@@ -88,6 +103,10 @@ export function App() {
           setInit(message.state);
           setOperation(message.state.operation);
           setUndo(message.state.undo);
+          setColumns(normalizeColumns(message.state.columns));
+          setTimeField(message.state.timeField);
+          setAllRepos(message.state.allRepos);
+          setFavorites(message.state.favorites ?? []);
           pageSizeRef.current = message.state.pageSize;
           const persisted = getState<PersistedState>();
           const usable = !initializedRef.current && persisted && persisted.root === message.state.repo.root
@@ -216,17 +235,18 @@ export function App() {
     }
   }, [focusHash, rows, hasMore]);
 
-  const select = (hash: string, parentIndex = 0) => {
-    if (selectedRef.current === hash && parentIndexRef.current === parentIndex) {
+  const select = (hash: string, parentIndex = 0, repoRoot?: string) => {
+    if (selectedRef.current === hash && parentIndexRef.current === parentIndex && repoRootRef.current === repoRoot) {
       return;
     }
     parentIndexRef.current = parentIndex;
+    repoRootRef.current = repoRoot;
     setSelected(hash);
     setDetail(null);
     setPreview(null);
     setDetailError(null);
     setDetailLoading(true);
-    post({ type: 'selectCommit', hash, parentIndex });
+    post({ type: 'selectCommit', hash, parentIndex, ...(repoRoot ? { repoRoot } : {}) });
   };
 
   useEffect(() => {
@@ -265,6 +285,35 @@ export function App() {
     setFilters((previous) => (previous ? { ...previous, ...patch } : previous));
   };
 
+  const toggleColumn = (column: HistoryColumn) => {
+    const next = columns.includes(column)
+      ? columns.filter((item) => item !== column)
+      : COLUMN_ORDER.filter((item) => item === column || columns.includes(item));
+    setColumns(next);
+    post({ type: 'setColumns', columns: next });
+  };
+
+  const changeTimeField = (field: 'author' | 'commit') => {
+    setTimeField(field);
+    post({ type: 'setTimeField', field });
+  };
+
+  const changeAllRepos = (enabled: boolean) => {
+    setAllRepos(enabled);
+    post({ type: 'setAllRepos', enabled });
+  };
+
+  const branchAction = (action: BranchAction, ref: RefInfo) => {
+    if (action === 'favorite') {
+      setFavorites((previous) =>
+        previous.includes(ref.name) ? previous.filter((name) => name !== ref.name) : [...previous, ref.name]
+      );
+    }
+    post({ type: 'branchAction', action, ref: ref.name });
+  };
+
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
+
   const resetFilters = () => {
     if (!filters) {
       return;
@@ -295,6 +344,10 @@ export function App() {
         repo={init.repo}
         refs={init.refs}
         filters={filters}
+        columns={columns}
+        timeField={timeField}
+        allRepos={allRepos}
+        repoCount={Math.max(1, init.repos.length)}
         onChange={changeFilters}
         onReset={resetFilters}
         onPickRepo={() => post({ type: 'pickerRepo' })}
@@ -303,6 +356,8 @@ export function App() {
         onUndo={() => post({ type: 'undoLastRewrite' })}
         undo={undo}
         onOpenSettings={() => post({ type: 'openSettings' })}
+        onToggleColumn={toggleColumn}
+        onTimeField={changeTimeField}
       />
 
       {busy && <div className="progress" />}
@@ -347,6 +402,14 @@ export function App() {
       )}
 
       <div className="main">
+        <BranchesSidebar
+          refs={init.refs}
+          favorites={favoriteSet}
+          currentBranch={init.currentBranch ?? init.repo.branch}
+          allRepos={allRepos}
+          onAllRepos={changeAllRepos}
+          onAction={branchAction}
+        />
         <CommitList
           rows={rows}
           graph={graph}
@@ -354,6 +417,12 @@ export function App() {
           loading={busy}
           selected={selected}
           compare={compare}
+          columns={columns}
+          timeField={timeField}
+          me={init.me}
+          currentBranch={init.currentBranch ?? init.repo.branch}
+          unpushed={init.unpushed}
+          allRepos={allRepos}
           onSelect={select}
           onToggleCompare={toggleCompare}
           onOpenCommit={(hash) => post({ type: 'openCommitChanges', hash })}

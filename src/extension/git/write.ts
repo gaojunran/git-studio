@@ -137,6 +137,12 @@ export class WriteCoordinator {
     });
   }
 
+  async command(cwd: string, args: string[], expectedHead: string | undefined): Promise<void> {
+    await this.run(cwd, expectedHead, async () => {
+      await this.runner.run(args, cwd);
+    });
+  }
+
   async createFixupCommit(
     cwd: string,
     hash: string,

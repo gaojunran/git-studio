@@ -10,6 +10,7 @@ import type {
   HostMessage,
   RebasePlan,
   RefInfo,
+  HistoryColumn,
   WebviewMessage
 } from '../../shared/protocol';
 import { loadCommitDetail } from '../git/commit';
@@ -106,6 +107,7 @@ export class HistoryPanel {
   private repoSubscriptions: vscode.Disposable[] = [];
   private repoRefreshTimer: NodeJS.Timeout | undefined;
   private lastRefreshAt = 0;
+  private allRepos = false;
 
   static async show(services: Services, options: ShowOptions = {}): Promise<HistoryPanel | undefined> {
     if (HistoryPanel.current && !options.repo) {
@@ -166,7 +168,9 @@ export class HistoryPanel {
     if (this.paths && this.paths.length > 0) {
       panel.title = `History: ${this.paths.length === 1 ? path.basename(this.paths[0]) : `${this.paths.length} paths`}`;
     } else if (this.filePath) {
-      panel.title = `History: ${path.basename(this.filePath)}`;
+      panel.title = options.lineRange
+        ? `History: ${path.basename(this.filePath)} lines ${options.lineRange}`
+        : `History: ${path.basename(this.filePath)}`;
     }
     this.disposables.push(
       panel.webview.onDidReceiveMessage((message: WebviewMessage) => void this.onMessage(message)),
@@ -263,7 +267,7 @@ export class HistoryPanel {
           await this.query(message);
           break;
         case 'selectCommit':
-          await this.select(message.hash, message.parentIndex ?? 0);
+          await this.select(message.hash, message.parentIndex ?? 0, message.repoRoot);
           break;
         case 'openBoardItem':
           await vscode.commands.executeCommand('gitStudio.boardOpenItem', {
@@ -287,6 +291,31 @@ export class HistoryPanel {
           break;
         case 'previewFile':
           await this.previewFile(message.hash, message.path);
+          break;
+        case 'branchAction':
+          await this.branchAction(message);
+          break;
+        case 'setColumns':
+          await vscode.workspace
+            .getConfiguration('gitStudio')
+            .update('history.columns', message.columns, vscode.ConfigurationTarget.Global);
+          await this.sendInit();
+          break;
+        case 'setTimeField':
+          await vscode.workspace
+            .getConfiguration('gitStudio')
+            .update('history.timeField', message.field, vscode.ConfigurationTarget.Global);
+          await this.sendInit();
+          break;
+        case 'setAllRepos':
+          this.allRepos = message.enabled;
+          this.consumed = 0;
+          this.rows = [];
+          this.rawRows = [];
+          this.rowHashes.clear();
+          this.graph = [];
+          this.hasMore = true;
+          await this.sendInit();
           break;
         case 'openCommitChanges':
           await this.openCommitChanges(message.hash);
@@ -355,6 +384,21 @@ export class HistoryPanel {
     const undo = last && head && last.after === head
       ? { label: last.label, before: last.before, after: last.after, branch: last.branch }
       : null;
+    const configuration = vscode.workspace.getConfiguration('gitStudio');
+    const favorites = configuration.get<string[]>('history.favoriteRefs', []);
+    this.refs = this.refs.map((ref) => ({ ...ref, favorite: favorites.includes(ref.name) }));
+    const [meName, meEmail, currentBranch, unpushed] = await Promise.all([
+      this.services.runner.run(['config', 'user.name'], this.repo.root).then((value) => value.trim()).catch(() => ''),
+      this.services.runner.run(['config', 'user.email'], this.repo.root).then((value) => value.trim()).catch(() => ''),
+      this.services.runner
+        .run(['symbolic-ref', '--short', '-q', 'HEAD'], this.repo.root)
+        .then((value) => value.trim())
+        .catch(() => ''),
+      this.services.runner
+        .run(['rev-list', '@{upstream}..HEAD'], this.repo.root)
+        .then((value) => value.split('\n').map((line) => line.trim()).filter(Boolean))
+        .catch(() => [])
+    ]);
     if (!this.refsInitialized || this.refsSource === 'default') {
       this.filters.refs = this.defaultRefs();
       this.refsInitialized = true;
@@ -372,9 +416,59 @@ export class HistoryPanel {
         filePath: this.filePath ?? null,
         pageSize: Math.max(50, Math.min(5000, pageSize)),
         operation,
-        undo
+        undo,
+        me: { name: meName, email: meEmail },
+        currentBranch: currentBranch || null,
+        favorites,
+        columns: configuration.get<HistoryColumn[]>('history.columns', [
+          'graph',
+          'subject',
+          'refs',
+          'author',
+          'date'
+        ]),
+        timeField: configuration.get<'author' | 'commit'>('history.timeField', 'author'),
+        unpushed,
+        allRepos: this.allRepos
       }
     });
+  }
+
+  private async loadAllRepos(
+    query: LogQuery,
+    skip: number,
+    limit: number,
+    signal: AbortSignal | undefined
+  ): Promise<{ rows: CommitRow[]; hasMore: boolean }> {
+    const repos = this.services.repoService.list();
+    const need = skip + limit;
+    const per = Math.min(2000, Math.max(limit, Math.ceil(need / Math.max(1, repos.length)) + 50));
+    const results = await Promise.all(
+      repos.map(async (handle, index) => {
+        const page = await loadCommits(
+          this.services.runner,
+          handle.root,
+          { ...query, refs: [], path: query.path, follow: false, skip: 0, limit: per },
+          signal
+        );
+        return {
+          hasMore: page.hasMore,
+          rows: page.rows.map((row) => ({
+            ...row,
+            repoRoot: handle.root,
+            repoName: handle.name,
+            repoColor: index
+          }))
+        };
+      })
+    );
+    const merged = results
+      .flatMap((result) => result.rows)
+      .sort((a, b) => b.commitDate - a.commitDate);
+    return {
+      rows: merged.slice(skip, skip + limit),
+      hasMore: merged.length > need || results.some((result) => result.hasMore)
+    };
   }
 
   private collapseRows(rows: CommitRow[]): CommitRow[] {
@@ -439,7 +533,9 @@ export class HistoryPanel {
         limit
       };
 
-      const result = await loadCommits(this.services.runner, this.repo.root, query, signal);
+      const result = this.allRepos
+        ? await this.loadAllRepos(query, skip, limit, signal)
+        : await loadCommits(this.services.runner, this.repo.root, query, signal);
       if (token !== this.token) {
         return;
       }
@@ -451,18 +547,20 @@ export class HistoryPanel {
       this.rawRows = message.append ? [...this.rawRows, ...incoming] : incoming;
       this.rowHashes = new Set(this.rawRows.map((row) => row.hash));
       this.rows = this.collapseRows(this.rawRows);
-      this.graph = layoutGraph(this.rows, {
-        pruneMissing: Boolean(
-          this.filters.message ||
-            this.filters.author ||
-            this.filters.path ||
-            this.filters.since ||
-            this.filters.until ||
-            this.filters.noMerges ||
-            this.filters.collapseLinear ||
-            this.paths
-        )
-      });
+      this.graph = this.allRepos
+        ? []
+        : layoutGraph(this.rows, {
+            pruneMissing: Boolean(
+              this.filters.message ||
+                this.filters.author ||
+                this.filters.path ||
+                this.filters.since ||
+                this.filters.until ||
+                this.filters.noMerges ||
+                this.filters.collapseLinear ||
+                this.paths
+            )
+          });
       this.hasMore = result.hasMore && result.rows.length > 0;
       this.consumed = message.append ? this.consumed + result.rows.length : result.rows.length;
 
@@ -509,7 +607,17 @@ export class HistoryPanel {
     }
   }
 
-  private async select(hash: string, parentIndex = 0): Promise<void> {
+  private async select(hash: string, parentIndex = 0, repoRoot?: string): Promise<void> {
+    if (repoRoot && repoRoot !== this.repo.root) {
+      const handle = this.services.repoService.list().find((candidate) => candidate.root === repoRoot);
+      if (handle) {
+        this.repo = handle;
+        this.bindRepo();
+        this.details.clear();
+        this.parentIndex.clear();
+        await this.sendInit();
+      }
+    }
     this.parentIndex.set(hash, parentIndex);
     const key = `${hash}:${parentIndex}`;
     const cached = this.details.get(key);
@@ -661,6 +769,93 @@ export class HistoryPanel {
       await this.services.writes.restoreFile(this.repo.root, hash, filePath, head);
       await this.afterWrite();
       void vscode.window.showInformationMessage(`Git Studio: restored ${filePath} from ${shortHash(hash)}.`);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Git Studio: ${errorText(error)}`);
+    }
+  }
+
+  private async branchAction(message: Extract<WebviewMessage, { type: 'branchAction' }>): Promise<void> {
+    const ref = this.refs.find((candidate) => candidate.name === message.ref || candidate.shortName === message.ref);
+    if (!ref && message.action !== 'create') {
+      void vscode.window.showWarningMessage('Git Studio: that branch is no longer available.');
+      return;
+    }
+    const configuration = vscode.workspace.getConfiguration('gitStudio');
+    const favorites = configuration.get<string[]>('history.favoriteRefs', []);
+
+    if (message.action === 'favorite') {
+      const next = favorites.includes(message.ref)
+        ? favorites.filter((item) => item !== message.ref)
+        : [...favorites, message.ref];
+      await configuration.update('history.favoriteRefs', next, vscode.ConfigurationTarget.Global);
+      await this.sendInit();
+      return;
+    }
+
+    const head = await headOid(this.services.runner, this.repo.root);
+    let args: string[] | undefined;
+    switch (message.action) {
+      case 'checkout':
+        args = ref!.type === 'remote'
+          ? ['checkout', '-b', ref!.shortName.split('/').slice(1).join('/'), '--track', ref!.shortName]
+          : ['checkout', ref!.shortName];
+        break;
+      case 'create': {
+        const name = await vscode.window.showInputBox({ prompt: 'New branch name', value: message.name ?? '' });
+        if (!name?.trim()) {
+          return;
+        }
+        args = ['checkout', '-b', name.trim(), ref?.shortName ?? 'HEAD'];
+        break;
+      }
+      case 'delete': {
+        const answer = await vscode.window.showWarningMessage(`Delete branch ${ref!.shortName}?`, { modal: true }, 'Delete');
+        if (answer !== 'Delete') {
+          return;
+        }
+        args = ['branch', '-d', ref!.shortName];
+        break;
+      }
+      case 'rename': {
+        const name = await vscode.window.showInputBox({ prompt: `Rename ${ref!.shortName} to`, value: ref!.shortName });
+        if (!name?.trim() || name.trim() === ref!.shortName) {
+          return;
+        }
+        args = ['branch', '-m', ref!.shortName, name.trim()];
+        break;
+      }
+      case 'merge': {
+        const answer = await vscode.window.showWarningMessage(
+          `Merge ${ref!.shortName} into the current branch?`,
+          { modal: true },
+          'Merge'
+        );
+        if (answer !== 'Merge') {
+          return;
+        }
+        args = ['merge', '--no-edit', ref!.shortName];
+        break;
+      }
+      case 'rebase': {
+        const answer = await vscode.window.showWarningMessage(
+          `Rebase the current branch onto ${ref!.shortName}?`,
+          { modal: true },
+          'Rebase'
+        );
+        if (answer !== 'Rebase') {
+          return;
+        }
+        args = ['rebase', ref!.shortName];
+        break;
+      }
+    }
+    if (!args) {
+      return;
+    }
+
+    try {
+      await this.services.writes.command(this.repo.root, args, head);
+      await this.afterWrite();
     } catch (error) {
       void vscode.window.showErrorMessage(`Git Studio: ${errorText(error)}`);
     }

@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.20.2",
+  "version": "0.21.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -425,6 +425,45 @@
           },
           "default": [],
           "markdownDescription": "Ref names or glob patterns that are always included, e.g. `release/*` or `origin/main`."
+        },
+        "gitStudio.history.favoriteRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Refs starred in the Branches sidebar."
+        },
+        "gitStudio.history.columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "graph",
+              "subject",
+              "refs",
+              "author",
+              "date",
+              "hash"
+            ]
+          },
+          "default": [
+            "graph",
+            "subject",
+            "refs",
+            "author",
+            "date"
+          ],
+          "description": "Columns shown in the commit list."
+        },
+        "gitStudio.history.timeField": {
+          "type": "string",
+          "enum": [
+            "author",
+            "commit"
+          ],
+          "default": "author",
+          "description": "Which timestamp the Date column shows."
         },
         "gitStudio.history.order": {
           "type": "string",

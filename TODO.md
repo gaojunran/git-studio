@@ -1,6 +1,6 @@
 # Git Studio — TODO
 
-> 当前版本：`0.20.2`
+> 当前版本：`0.21.0`
 > 定位：IntelliJ Log 风格的 Git 历史工作台。History 用 WebView，其余尽量复用 VS Code 原生 UI。
 
 ## 已完成（基线）
@@ -27,6 +27,10 @@
 - [x] Reflog 工作台：HEAD / 分支 reflog、查看、与 HEAD / 任意 ref 对比、reset --hard、在新分支恢复
 - [x] Worktree 工作台：列表、dirty、当前/新窗口打开、创建、remove、prune
 - [x] 多仓库：History 面板内快速切换
+- [x] Branches 侧栏：收藏、本地/远程/tag 分组、ahead/behind、checkout/create/rename/delete/merge/rebase/favorite
+- [x] 列配置：graph / subject / refs / author / date / hash，author/commit 时间切换
+- [x] 视觉标记：自己的提交加粗、当前分支底色、merge 灰显、未推送圆点
+- [x] 多仓库统一 Log：按时间合并所有仓库、repo 徽标、选中后切换仓库
 - [x] patch 导出 / 应用、历史图 SVG 导出
 - [x] CI（typecheck / vitest / build / VSIX）与 changelog
 - [x] 集成冒烟脚本移入 `test/integration`，提供 `npm run test:integration`
@@ -58,7 +62,6 @@
 - 真正的 lane folding：把无可见节点的侧分支折叠成一条灰色摘要行，可展开。
 - 向 OpenChamber 上游提议 guest 契约：commit → MR 批量反查、review threads 读写、逐条 checks、close reason、timeline DTO。
 - Board：创建/编辑 PR/MR、submit requirements、Gerrit revisions、附件上传。
-- History：多仓库统一 Log + root 颜色、分支面板 / favorite branches。
 - 性能：只有在实测解析或 layout 占关键路径 ≥40% 且优化后仍 ≥2× 时才考虑 worker / Rust。
 - Marketplace 发布与自动更新。
 

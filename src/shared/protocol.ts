@@ -15,6 +15,10 @@ export interface RefInfo {
   /** Subject of the commit the ref points at. */
   subject?: string;
   current: boolean;
+  favorite?: boolean;
+  /** Commits ahead of / behind the upstream, when it has one. */
+  ahead?: number;
+  behind?: number;
 }
 
 export interface Filters {
@@ -49,6 +53,11 @@ export interface CommitRow {
   parents: string[];
   /** Decorations reported by git, e.g. HEAD -> main, tag: v1.0. */
   refs: string[];
+  /** Repository root when the row comes from the all-repositories view. */
+  repoRoot?: string;
+  repoName?: string;
+  /** Stable color index for the repository in the all-repositories view. */
+  repoColor?: number;
 }
 
 export interface GraphSegment {
@@ -146,6 +155,8 @@ export interface UndoInfo {
   branch: string | null;
 }
 
+export type HistoryColumn = 'graph' | 'subject' | 'refs' | 'author' | 'date' | 'hash';
+
 export interface InitState {
   repo: RepoSummary;
   repos: RepoSummary[];
@@ -156,6 +167,14 @@ export interface InitState {
   /** Merge, rebase, cherry-pick or revert currently in progress. */
   operation: string | null;
   undo: UndoInfo | null;
+  me: { name: string; email: string };
+  currentBranch: string | null;
+  favorites: string[];
+  columns: HistoryColumn[];
+  timeField: 'author' | 'commit';
+  /** Commits on the current branch that are not on its upstream. */
+  unpushed: string[];
+  allRepos: boolean;
 }
 
 export interface CommitQuery {
@@ -181,12 +200,16 @@ export type HostMessage =
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'query'; requestId: number; append: boolean; filters: Filters; skip: number; limit: number }
-  | { type: 'selectCommit'; hash: string; parentIndex?: number }
+  | { type: 'selectCommit'; hash: string; parentIndex?: number; repoRoot?: string }
   | { type: 'openFileDiff'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'openFileWithLocal'; hash: string; path: string; oldPath?: string; status: ChangeStatus; before?: boolean }
   | { type: 'getFileFromRevision'; hash: string; path: string }
   | { type: 'fileActions'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
   | { type: 'previewFile'; hash: string; path: string }
+  | { type: 'branchAction'; action: 'checkout' | 'create' | 'delete' | 'rename' | 'merge' | 'rebase' | 'favorite'; ref: string; name?: string }
+  | { type: 'setColumns'; columns: HistoryColumn[] }
+  | { type: 'setTimeField'; field: 'author' | 'commit' }
+  | { type: 'setAllRepos'; enabled: boolean }
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'commitActions'; hash: string }
   | { type: 'abortOperation' }
