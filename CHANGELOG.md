@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.2
+
+- Fixed `More than one commit to dig from` on line-range history: `-L` queries now pass a single
+  revision (`HEAD` when selected, otherwise the first ref) instead of every selected ref.
+
 ## 0.20.1
 
 - Fixed `--follow requires exactly one pathspec` when opening history for a selected line range: a

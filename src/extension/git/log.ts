@@ -105,7 +105,9 @@ export function buildLogArgs(query: LogQuery): string[] {
     }
   }
 
-  if (query.hash) {
+  if (query.lineRange) {
+    args.push(query.refs.find((ref) => ref === 'HEAD') ?? query.refs[0] ?? 'HEAD');
+  } else if (query.hash) {
     args.push(`${query.hash}^!`);
   } else {
     args.push(...(query.refs.length > 0 ? query.refs : ['--all']));

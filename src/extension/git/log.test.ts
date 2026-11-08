@@ -15,6 +15,19 @@ describe('buildLogArgs', () => {
     expect(args).not.toContain('--follow');
     expect(args).not.toContain('--');
   });
+
+  it('uses exactly one revision for a line range', () => {
+    const args = buildLogArgs({
+      refs: ['refs/heads/develop', 'HEAD'],
+      path: 'src/a.ts',
+      lineRange: '10,20',
+      skip: 0,
+      limit: 50
+    });
+    expect(args).toContain('HEAD');
+    expect(args).not.toContain('refs/heads/develop');
+    expect(args).not.toContain('--all');
+  });
 });
 
 describe('parseLog', () => {
