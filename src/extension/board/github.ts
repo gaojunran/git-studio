@@ -34,6 +34,7 @@ export interface BoardProvider {
   review?(number: number, verdict: 'approve' | 'request-changes', body?: string): Promise<void>;
   replyReviewThread?(threadId: string, body: string): Promise<void>;
   reviewVotes?(number: number, votes: Record<string, number>, body?: string): Promise<void>;
+  findChangeRequestsForCommit?(sha: string): Promise<BoardItemSummary[]>;
 }
 
 export interface GitHubRepo {
@@ -346,6 +347,13 @@ export class GitHubProvider implements BoardProvider {
       hasMore: data.repository.discussions.totalCount > query.page * query.perPage,
       page: query.page
     };
+  }
+
+  async findChangeRequestsForCommit(sha: string): Promise<BoardItemSummary[]> {
+    const pulls = await this.request<GitHubPull[]>(
+      `/repos/${this.github.owner}/${this.github.name}/commits/${encodeURIComponent(sha)}/pulls`
+    );
+    return pulls.map((pull) => this.pullSummary(pull));
   }
 
   async list(query: BoardListQuery): Promise<BoardListResult> {

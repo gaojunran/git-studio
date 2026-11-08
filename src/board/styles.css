@@ -1,33 +1,33 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 
-  --bg: #131110;
-  --surface: #171514;
-  --surface-2: #1b1918;
-  --surface-deep: #0e0c0b;
-  --surface-hover: rgba(255, 255, 255, 0.045);
-  --surface-selected: rgba(255, 255, 255, 0.085);
+  --bg: var(--vscode-editor-background);
+  --surface: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --surface-2: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  --surface-deep: var(--vscode-editor-background);
+  --surface-hover: var(--vscode-list-hoverBackground);
+  --surface-selected: var(--vscode-list-activeSelectionBackground);
 
-  --border: #242323;
-  --border-strong: #343230;
-  --border-soft: rgba(255, 255, 255, 0.07);
+  --border: var(--vscode-panel-border);
+  --border-strong: var(--vscode-contrastBorder, var(--vscode-panel-border));
+  --border-soft: var(--vscode-panel-border);
 
-  --fg: #d6d1c6;
-  --fg-strong: #e9e5da;
-  --fg-body: #c6c2b8;
-  --fg-soft: #b3afa4;
-  --muted: #89867c;
-  --muted-dim: #6f6c64;
+  --fg: var(--vscode-foreground);
+  --fg-strong: var(--vscode-foreground);
+  --fg-body: var(--vscode-foreground);
+  --fg-soft: var(--vscode-descriptionForeground);
+  --muted: var(--vscode-descriptionForeground);
+  --muted-dim: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
 
-  --accent: #da7c47;
-  --accent-fg: #191210;
-  --accent-ring: rgba(218, 124, 71, 0.28);
-  --green: #93a233;
-  --green-text: #a9b64a;
-  --green-bright: #7cb45c;
-  --red: #da5b4a;
-  --purple: #9988e5;
-  --link: #5d99a9;
+  --accent: var(--vscode-button-background);
+  --accent-fg: var(--vscode-button-foreground);
+  --accent-ring: var(--vscode-focusBorder);
+  --green: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-charts-green));
+  --green-text: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-charts-green));
+  --green-bright: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-charts-green));
+  --red: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-errorForeground));
+  --purple: var(--vscode-charts-purple, var(--vscode-textLink-foreground));
+  --link: var(--vscode-textLink-foreground);
 
   --radius-lg: 12px;
 
@@ -55,6 +55,16 @@ body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body.vscode-light {
+  color-scheme: light;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  color-scheme: dark;
 }
 
 button,
@@ -89,14 +99,14 @@ svg {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4));
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100, 100, 100, 0.7));
   background-clip: padding-box;
 }
 
@@ -156,7 +166,7 @@ svg {
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vscode-list-hoverBackground);
   color: var(--fg);
 }
 
@@ -180,7 +190,7 @@ svg {
 
 .icon-btn--outlined:hover {
   border-color: var(--border-strong);
-  background: #1b1817;
+  background: var(--surface-2);
 }
 
 /* ---------- Toolbar ---------- */
@@ -201,7 +211,7 @@ svg {
   padding: 2px;
   border-radius: 10px;
   background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px var(--vscode-panel-border);
   flex: none;
 }
 
@@ -223,18 +233,18 @@ svg {
 
 .tab:hover {
   color: var(--fg);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--vscode-list-hoverBackground);
 }
 
 .tab--active {
   color: var(--fg-strong);
-  background: #262321;
+  background: var(--surface-hover);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--vscode-panel-border), inset 0 1px 0 var(--vscode-panel-border);
 }
 
 .tab--active:hover {
-  background: #2a2725;
+  background: var(--surface-selected);
   color: var(--fg-strong);
 }
 
@@ -298,9 +308,9 @@ svg {
 }
 
 .search:focus-within {
-  background: #191615;
-  border-color: rgba(218, 124, 71, 0.45);
-  box-shadow: 0 0 0 3px rgba(218, 124, 71, 0.1);
+  background: var(--surface-2);
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
 }
 
 .search__icon {
@@ -322,7 +332,7 @@ svg {
 }
 
 .search input::placeholder {
-  color: #7d7a72;
+  color: var(--muted-dim);
 }
 
 .search__clear {
@@ -338,7 +348,7 @@ svg {
 }
 
 .search__clear:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--vscode-panel-border);
   color: var(--fg);
 }
 
@@ -374,8 +384,8 @@ svg {
 
 .filter select:focus {
   outline: none;
-  border-color: rgba(218, 124, 71, 0.45);
-  box-shadow: 0 0 0 3px rgba(218, 124, 71, 0.1);
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
 }
 
 .filter__chevron {
@@ -420,7 +430,7 @@ svg {
 
 .list-trigger:hover {
   border-color: var(--border-strong);
-  background: #1b1817;
+  background: var(--surface-2);
   color: var(--fg);
 }
 
@@ -595,7 +605,7 @@ svg {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--surface-2);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 18px 40px var(--vscode-widget-shadow);
   overflow: hidden;
 }
 
@@ -639,7 +649,7 @@ svg {
 .row--active,
 .row--active:hover {
   background: var(--surface-selected);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px 0 var(--vscode-panel-border);
 }
 
 .row:focus-visible {
@@ -812,8 +822,8 @@ svg {
 
 .label__remove:hover,
 .reviewer__remove:hover {
-  background: rgba(218, 91, 74, 0.16);
-  color: #e08a7d;
+  background: color-mix(in srgb, var(--vscode-errorForeground) 16%, transparent);
+  color: var(--red);
 }
 
 .label__remove:disabled,
@@ -860,7 +870,7 @@ svg {
 }
 
 .chip-add:focus-within {
-  border-color: rgba(218, 124, 71, 0.45);
+  border-color: var(--vscode-focusBorder);
   box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
@@ -910,7 +920,7 @@ svg {
   height: 20px;
   border-radius: 50%;
   background: var(--surface-2);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vscode-panel-border);
   font-size: 10px;
   font-weight: 700;
   color: var(--fg-soft);
@@ -960,11 +970,11 @@ svg {
   gap: 12px;
   margin: 12px 28px 0;
   padding: 9px 12px;
-  border: 1px solid rgba(218, 91, 74, 0.4);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
   border-radius: 9px;
-  background: rgba(218, 91, 74, 0.08);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent);
   font-size: 12px;
-  color: #e08a7d;
+  color: var(--red);
 }
 
 .detail__error .error__retry {
@@ -978,10 +988,10 @@ svg {
   right: 0;
   z-index: 5;
   padding: 5px 28px;
-  background: rgba(218, 124, 71, 0.14);
-  border-bottom: 1px solid rgba(218, 124, 71, 0.22);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 16%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 24%, transparent);
   font-size: 11.5px;
-  color: #e8b492;
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow));
 }
 
 .detail__header {
@@ -1033,7 +1043,7 @@ svg {
 }
 
 .ghost-link:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vscode-list-hoverBackground);
   color: var(--fg);
 }
 
@@ -1078,22 +1088,22 @@ svg {
 
 .state--open {
   color: var(--green-text);
-  background: rgba(147, 162, 51, 0.16);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 16%, transparent);
 }
 
 .state--closed {
   color: var(--red);
-  background: rgba(218, 91, 74, 0.14);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 14%, transparent);
 }
 
 .state--merged {
   color: var(--purple);
-  background: rgba(153, 136, 229, 0.16);
+  background: color-mix(in srgb, var(--vscode-charts-purple) 16%, transparent);
 }
 
 .state--draft {
   color: var(--fg-soft);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vscode-list-hoverBackground);
 }
 
 /* ---------- Detail body ---------- */
@@ -1238,7 +1248,7 @@ svg {
   background: var(--surface-deep);
   font-family: var(--mono);
   font-size: 12px;
-  color: #9fc47a;
+  color: var(--green);
 }
 
 .markdown pre {
@@ -1255,13 +1265,13 @@ svg {
   background: transparent;
   font-size: 12px;
   line-height: 1.6;
-  color: #c9c6ba;
+  color: var(--fg-body);
 }
 
 .markdown blockquote {
   margin: 0 0 12px;
   padding: 2px 0 2px 14px;
-  border-left: 2px solid #3a3734;
+  border-left: 2px solid var(--border);
   color: var(--muted);
 }
 
@@ -1283,7 +1293,7 @@ svg {
 
 .comment {
   padding: 16px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: 1px solid var(--vscode-panel-border);
 }
 
 .comment:first-of-type {
@@ -1324,7 +1334,7 @@ svg {
   margin: 0 -12px;
   padding-inline: 12px;
   border-radius: 10px;
-  background: rgba(147, 162, 51, 0.05);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 7%, transparent);
   border-top-color: transparent;
 }
 
@@ -1361,8 +1371,8 @@ svg {
 }
 
 .composer textarea:focus {
-  border-color: rgba(218, 124, 71, 0.45);
-  box-shadow: 0 0 0 3px rgba(218, 124, 71, 0.1);
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
 }
 
 .detail__closed {
@@ -1419,7 +1429,7 @@ svg {
 
 .votes__value--active {
   border-color: var(--accent);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--vscode-list-activeSelectionBackground);
   color: var(--fg);
 }
 
@@ -1459,7 +1469,7 @@ svg {
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--vscode-list-hoverBackground);
   color: var(--fg-soft);
   font-size: 12px;
   font-weight: 500;
@@ -1468,7 +1478,7 @@ svg {
 }
 
 .btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vscode-list-hoverBackground);
   border-color: var(--border-strong);
   color: var(--fg);
 }
@@ -1490,33 +1500,33 @@ svg {
 }
 
 .btn--primary:hover:not(:disabled) {
-  border-color: #e78f5a;
-  background: #e78f5a;
+  border-color: var(--accent);
+  background: var(--accent);
   color: var(--accent-fg);
 }
 
 .btn--accent {
-  border-color: rgba(218, 124, 71, 0.5);
-  background: rgba(218, 124, 71, 0.08);
-  color: #e6a077;
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent);
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow));
 }
 
 .btn--accent:hover:not(:disabled) {
-  border-color: rgba(218, 124, 71, 0.7);
-  background: rgba(218, 124, 71, 0.16);
-  color: #f0b088;
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow));
 }
 
 .btn--approve {
-  border-color: rgba(124, 180, 92, 0.5);
-  background: rgba(124, 180, 92, 0.08);
-  color: #9cc97e;
+  border-color: var(--vscode-gitDecoration-addedResourceForeground);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 10%, transparent);
+  color: var(--green);
 }
 
 .btn--approve:hover:not(:disabled) {
-  border-color: rgba(124, 180, 92, 0.7);
-  background: rgba(124, 180, 92, 0.16);
-  color: #b3d99a;
+  border-color: var(--vscode-gitDecoration-addedResourceForeground);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 16%, transparent);
+  color: var(--green);
 }
 
 /* ---------- Multi-select picker ---------- */
@@ -1547,7 +1557,7 @@ svg {
   border: 1px solid var(--border-strong);
   border-radius: 11px;
   background: var(--surface-2);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 40px var(--vscode-widget-shadow);
   animation: popover-in 130ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
@@ -1569,8 +1579,8 @@ svg {
 }
 
 .picker__search:focus {
-  border-color: rgba(218, 124, 71, 0.45);
-  box-shadow: 0 0 0 3px rgba(218, 124, 71, 0.1);
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-focusBorder) 18%, transparent);
 }
 
 .picker__chips {
@@ -1587,7 +1597,7 @@ svg {
   padding: 1px 6px 1px 7px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--vscode-list-hoverBackground);
 }
 
 .picker__list {
@@ -1750,7 +1760,7 @@ svg {
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: var(--surface-2);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.52);
+  box-shadow: 0 16px 36px var(--vscode-widget-shadow);
   animation: popover-in 120ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
@@ -1851,7 +1861,7 @@ svg {
 
 .checks-pill--pass {
   color: var(--green-text);
-  background: rgba(147, 162, 51, 0.15);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 15%, transparent);
 }
 
 .checks-pill--pass .checks-pill__dot {
@@ -1859,8 +1869,8 @@ svg {
 }
 
 .checks-pill--fail {
-  color: #e08a7d;
-  background: rgba(218, 91, 74, 0.15);
+  color: var(--red);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 15%, transparent);
 }
 
 .checks-pill--fail .checks-pill__dot {
@@ -1868,8 +1878,8 @@ svg {
 }
 
 .checks-pill--pending {
-  color: #e6a077;
-  background: rgba(218, 124, 71, 0.14);
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow));
+  background: color-mix(in srgb, var(--vscode-focusBorder) 16%, transparent);
 }
 
 .checks-pill--pending .checks-pill__dot {
@@ -1884,7 +1894,7 @@ svg {
   align-items: flex-start;
   justify-content: center;
   padding: 8vh 20px 20px;
-  background: rgba(8, 7, 6, 0.6);
+  background: var(--vscode-editorWidget-background);
   backdrop-filter: blur(2px);
   animation: fade-in 130ms ease;
 }
@@ -1897,7 +1907,7 @@ svg {
   border: 1px solid var(--border-strong);
   border-radius: 14px;
   background: var(--surface-2);
-  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.62);
+  box-shadow: 0 26px 64px var(--vscode-widget-shadow);
   overflow: hidden;
   animation: modal-in 170ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
@@ -1961,11 +1971,11 @@ svg {
 .checks-error {
   margin: 10px 0 0;
   padding: 8px 10px;
-  border: 1px solid rgba(218, 91, 74, 0.35);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
   border-radius: 8px;
-  background: rgba(218, 91, 74, 0.08);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent);
   font-size: 12px;
-  color: #e08a7d;
+  color: var(--red);
 }
 
 .checks {
@@ -1979,7 +1989,7 @@ svg {
   align-items: center;
   gap: 10px;
   padding: 10px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  border-top: 1px solid var(--vscode-panel-border);
 }
 
 .check:first-child {
@@ -2042,17 +2052,17 @@ svg {
 
 .check__state--pass {
   color: var(--green-text);
-  background: rgba(147, 162, 51, 0.14);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 14%, transparent);
 }
 
 .check__state--fail {
-  color: #e08a7d;
-  background: rgba(218, 91, 74, 0.14);
+  color: var(--red);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 14%, transparent);
 }
 
 .check__state--pending {
-  color: #e6a077;
-  background: rgba(218, 124, 71, 0.13);
+  color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-charts-yellow));
+  background: color-mix(in srgb, var(--vscode-focusBorder) 15%, transparent);
 }
 
 .check__link {
@@ -2116,7 +2126,7 @@ svg {
 .threads__count {
   padding: 0 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vscode-list-hoverBackground);
   font-size: 10.5px;
   font-weight: 600;
   line-height: 17px;
@@ -2128,7 +2138,7 @@ svg {
   padding: 0 14px 4px;
   border: 1px solid var(--border);
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.014);
+  background: var(--vscode-list-hoverBackground);
 }
 
 .thread__head {
@@ -2152,7 +2162,7 @@ svg {
 .thread__badge {
   padding: 1px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--vscode-panel-border);
   font-size: 10.5px;
   font-weight: 500;
   color: var(--muted);
@@ -2162,7 +2172,7 @@ svg {
 
 .thread__badge--resolved {
   color: var(--green-text);
-  background: rgba(147, 162, 51, 0.14);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 14%, transparent);
 }
 
 .thread__count {
@@ -2179,7 +2189,7 @@ svg {
 }
 
 .thread .comment + .comment {
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--vscode-panel-border);
 }
 
 .thread .comment:first-of-type {
@@ -2226,7 +2236,7 @@ svg {
 }
 
 .error {
-  color: #e08a7d;
+  color: var(--red);
 }
 
 /* ---------- Responsive ---------- */

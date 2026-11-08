@@ -2081,6 +2081,19 @@ export function App() {
         setStateError(message.error);
         return;
       }
+      if (message.type === 'focusItem') {
+        setTrackerOpen(false);
+        setListOpen(false);
+        setKind(message.kind);
+        setSelected(message.number);
+        setDetail(null);
+        setDetailLoading(true);
+        setDetailError(undefined);
+        const id = ++requestId.current;
+        detailRequest.current = id;
+        post({ type: 'detail', requestId: id, kind: message.kind, number: message.number });
+        return;
+      }
       if (message.type === 'list') {
         if (message.requestId !== 0 && message.requestId !== listRequest.current) {
           return;

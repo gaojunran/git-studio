@@ -143,6 +143,11 @@ Gerrit are built in; other hosts come from OpenChamber source-control integratio
 - Tabs: issues, pull requests and, on GitHub, discussions. Installed tracker packages add a
   **Tracker** tab with their work items, states, labels, assignees and comments.
 - Search and open/closed/all filter, paged list, split preview.
+- The board follows the active VS Code light, dark or high-contrast theme through `--vscode-*`
+  variables; it has no fixed palette.
+- Commit details in History scan the message for `#123`, `!123` and issue/PR/MR URLs, and show the
+  change requests associated with the commit (GitHub, GitLab, Gitea) as badges. Clicking a badge opens
+  that item in the board.
 - Labels and reviewers use searchable multi-select pickers; merge is one split button that remembers
   the last method; close offers host-specific reasons; draft PRs can be marked ready.
 - Checks open in a dialog, review threads are shown and GitHub threads can be replied to.

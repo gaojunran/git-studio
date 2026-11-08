@@ -134,6 +134,15 @@ export class GiteaProvider implements BoardProvider {
     };
   }
 
+  async findChangeRequestsForCommit(sha: string): Promise<BoardItemSummary[]> {
+    try {
+      const pull = await this.request<GtPull>(`/commits/${encodeURIComponent(sha)}/pull`);
+      return pull?.number ? [this.summary(pull, 'pull')] : [];
+    } catch {
+      return [];
+    }
+  }
+
   async list(query: BoardListQuery): Promise<BoardListResult> {
     const limit = Math.max(1, Math.min(50, query.perPage));
     const state = query.state === 'all' ? 'all' : query.state === 'closed' ? 'closed' : 'open';

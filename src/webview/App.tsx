@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   CommitDetail,
+  CommitItemLink,
   CommitRow,
   Filters,
   GraphRow,
@@ -34,6 +35,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<CommitDetail | null>(null);
+  const [commitItems, setCommitItems] = useState<CommitItemLink[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [compare, setCompare] = useState<string | null>(null);
@@ -118,8 +120,16 @@ export function App() {
             return;
           }
           setDetail(message.detail);
+          setCommitItems([]);
           setDetailError(message.error ?? null);
           setDetailLoading(false);
+          break;
+        }
+        case 'commitItems': {
+          if (message.hash !== selectedRef.current) {
+            return;
+          }
+          setCommitItems(message.items);
           break;
         }
         case 'filters': {
@@ -316,6 +326,7 @@ export function App() {
         />
         <DetailPane
           detail={detail}
+          items={commitItems}
           loading={detailLoading}
           error={detailError}
           selected={selected}
@@ -338,6 +349,7 @@ export function App() {
           onCompare={() => selected && compare && post({ type: 'compare', a: compare, b: selected })}
           onActions={() => selected && post({ type: 'commitActions', hash: selected })}
           onCopy={(text) => post({ type: 'copy', text })}
+          onOpenBoardItem={(item) => post({ type: 'openBoardItem', ...item })}
         />
       </div>
       <RebaseDialog

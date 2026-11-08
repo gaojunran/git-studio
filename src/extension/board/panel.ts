@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import type {
   BoardHostMessage,
+  BoardItemSummary,
   BoardKind,
   BoardListQuery,
   BoardProviderInfo,
   BoardRepoInfo,
   BoardWebviewMessage
 } from '../../shared/board';
+import type { CommitItemLink } from '../../shared/protocol';
 import { pickRemoteUrl, normalizeRemoteUrl } from '../git/remote';
 import { GitHubProvider, parseGitHubRemote, type BoardProvider } from './github';
 import { GitLabProvider, type GitLabRepo } from './gitlab';
@@ -60,6 +62,18 @@ function parseHostRemote(raw: string | undefined): HostRemote | undefined {
   return kind ? { kind, base: `${url.protocol}//${url.host}`, owner, name } : undefined;
 }
 
+function linkOf(providerId: string, providerLabel: string, item: BoardItemSummary): CommitItemLink {
+  return {
+    providerId,
+    providerLabel,
+    kind: item.kind,
+    number: item.number,
+    title: item.title,
+    state: item.state,
+    url: item.url
+  };
+}
+
 interface BoardRemote {
   name: string;
   fetchUrl?: string;
@@ -75,6 +89,7 @@ export interface BoardRepo {
 interface ShowOptions {
   repo?: BoardRepo;
   uri?: vscode.Uri;
+  focus?: { providerId?: string; kind: BoardKind; number: number };
 }
 
 async function gitTopLevel(services: Services, start: string): Promise<string | undefined> {
@@ -152,6 +167,7 @@ export class BoardPanel {
   private lastKind: BoardKind = 'issue';
   private lastNumber: number | undefined;
   private lastQuery: BoardListQuery | undefined;
+  private pendingFocus: { providerId?: string; kind: BoardKind; number: number } | undefined;
 
   static async show(services: Services, secrets: vscode.SecretStorage, board: BoardContext, options: ShowOptions = {}): Promise<BoardPanel | undefined> {
     const repo = options.repo ?? await resolveBoardRepo(services, options.uri ?? vscode.window.activeTextEditor?.document.uri);
@@ -162,6 +178,7 @@ export class BoardPanel {
 
     if (BoardPanel.current) {
       BoardPanel.current.repo = repo;
+      BoardPanel.current.pendingFocus = options.focus;
       BoardPanel.current.panel.reveal();
       await BoardPanel.current.refreshState();
       return BoardPanel.current;
@@ -178,11 +195,51 @@ export class BoardPanel {
       }
     );
     BoardPanel.current = new BoardPanel(services.extensionUri, secrets, board, repo, panel);
+    BoardPanel.current.pendingFocus = options.focus;
     return BoardPanel.current;
   }
 
   static async refreshCurrent(): Promise<void> {
     await BoardPanel.current?.refreshState();
+  }
+
+  static async findCommitItems(
+    services: Services,
+    secrets: vscode.SecretStorage,
+    root: string,
+    sha: string
+  ): Promise<CommitItemLink[]> {
+    const remote = pickRemoteUrl(await readRemotes(services, root));
+    if (!remote) {
+      return [];
+    }
+
+    const github = parseGitHubRemote(remote);
+    if (github) {
+      const token = await secrets.get(TOKEN_KEY);
+      if (!token) {
+        return [];
+      }
+      const provider = new GitHubProvider(token, github);
+      provider.repo.root = root;
+      const items = provider.findChangeRequestsForCommit ? await provider.findChangeRequestsForCommit(sha) : [];
+      return items.map((item) => linkOf('github', 'GitHub', item));
+    }
+
+    const host = parseHostRemote(remote);
+    if (!host || host.kind === 'gerrit') {
+      return [];
+    }
+    const token = await secrets.get(host.kind === 'gitlab' ? GITLAB_TOKEN_KEY : GITEA_TOKEN_KEY);
+    if (!token) {
+      return [];
+    }
+    const provider = host.kind === 'gitlab'
+      ? new GitLabProvider(token, host as GitLabRepo)
+      : new GiteaProvider(token, host as GiteaRepo);
+    provider.repo.root = root;
+    const items = provider.findChangeRequestsForCommit ? await provider.findChangeRequestsForCommit(sha) : [];
+    return items.map((item) => linkOf(host.kind, host.kind === 'gitlab' ? 'GitLab' : 'Gitea', item));
   }
 
   static async connectGithub(secrets: vscode.SecretStorage): Promise<void> {
@@ -536,6 +593,9 @@ export class BoardPanel {
   }
 
   private async refreshState(): Promise<void> {
+    if (this.pendingFocus?.providerId && this.pendingFocus.providerId !== this.providerId) {
+      this.preferredProviderId = this.pendingFocus.providerId;
+    }
     await this.buildProvider();
     await this.buildTracker();
     this.panel.title = `Issues and PRs — ${this.repo?.name ?? 'repository'}`;
@@ -548,6 +608,10 @@ export class BoardPanel {
       trackers: this.trackers,
       trackerId: this.trackerId
     });
+    if (this.pendingFocus && this.ready) {
+      this.post({ type: 'focusItem', ...this.pendingFocus });
+      this.pendingFocus = undefined;
+    }
   }
 
   private async buildTracker(): Promise<void> {

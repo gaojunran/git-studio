@@ -1,6 +1,6 @@
 # Git Studio — TODO
 
-> 当前版本：`0.16.5`
+> 当前版本：`0.17.0`
 > 定位：IntelliJ Log 风格的 Git 历史工作台。History 用 WebView，其余尽量复用 VS Code 原生 UI。
 
 ## 已完成（基线）
@@ -41,6 +41,8 @@
 - [x] 多 provider 切换
 - [x] Board UI：可调分栏、窄屏列表浮层、键盘导航、搜索、筛选、分页、详情、评论、Merge 分裂按钮、Close 原因、Checks 弹窗、Review threads、Tracker 状态/评论
 - [x] Board UI 与 OpenChamber 的布局、间距、字体、颜色和交互对齐（以静态预览和真实 VS Code 截图验收）
+- [x] Board 主题跟随 VS Code 的 light / dark / high-contrast 变量
+- [x] History 提交引用与关联 MR/PR 联动 Board
 
 ## 已知边界
 

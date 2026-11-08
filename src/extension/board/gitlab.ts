@@ -140,6 +140,13 @@ export class GitLabProvider implements BoardProvider {
     };
   }
 
+  async findChangeRequestsForCommit(sha: string): Promise<BoardItemSummary[]> {
+    const items = await this.request<GlMergeRequest[]>(
+      `/projects/${this.project}/repository/commits/${encodeURIComponent(sha)}/merge_requests`
+    );
+    return items.map((item) => this.summary(item, 'pull'));
+  }
+
   async list(query: BoardListQuery): Promise<BoardListResult> {
     const perPage = Math.max(1, Math.min(100, query.perPage));
     const state = query.state === 'all' ? 'all' : query.state === 'closed' ? 'closed' : 'opened';

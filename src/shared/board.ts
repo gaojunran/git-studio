@@ -260,7 +260,8 @@ export type BoardHostMessage =
   | BoardTrackerListMessage
   | BoardTrackerDetailMessage
   | BoardBusyMessage
-  | BoardErrorMessage;
+  | BoardErrorMessage
+  | { type: 'focusItem'; providerId?: string; kind: BoardKind; number: number };
 
 export type BoardWebviewMessage =
   | { type: 'ready' }

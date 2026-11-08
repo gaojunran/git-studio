@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+- Board now uses VS Code theme variables for backgrounds, text, borders, links and semantic colors in
+  both light and dark themes instead of a fixed OpenChamber palette.
+- Commit messages are scanned for issue/PR/MR references and URLs; each reference opens the matching
+  item in the Board.
+- Commit details asynchronously look up associated change requests (GitHub, GitLab, Gitea) and show
+  them as linked badges.
+- The Board can be opened focused on a specific item from History.
+
 ## 0.16.5
 
 - `Linear` now only hides merge commits (`--no-merges`) instead of also applying `--first-parent`, so

@@ -72,6 +72,16 @@ export interface FileChange {
   binary: boolean;
 }
 
+export interface CommitItemLink {
+  providerId: string;
+  providerLabel: string;
+  kind: 'issue' | 'pull' | 'discussion';
+  number: number;
+  title: string;
+  state: string;
+  url: string;
+}
+
 export interface CommitDetail {
   hash: string;
   message: string;
@@ -145,6 +155,7 @@ export type HostMessage =
   | { type: 'init'; state: InitState }
   | { type: 'commits'; requestId: number; append: boolean; rows: CommitRow[]; graph: GraphRow[]; hasMore: boolean; stale: boolean }
   | { type: 'detail'; hash: string; detail: CommitDetail | null; error?: string }
+  | { type: 'commitItems'; hash: string; items: CommitItemLink[] }
   | { type: 'filters'; filters: Filters }
   | { type: 'focusCommit'; hash: string }
   | { type: 'operation'; operation: string | null }
@@ -173,4 +184,5 @@ export type WebviewMessage =
   | { type: 'pickerRepo' }
   | { type: 'refresh' }
   | { type: 'copy'; text: string }
+  | { type: 'openBoardItem'; providerId?: string; kind: 'issue' | 'pull' | 'discussion'; number: number }
   | { type: 'openSettings' };

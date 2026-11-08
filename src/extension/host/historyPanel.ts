@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import type {
   CommitDetail,
+  CommitItemLink,
   CommitRow,
   FileChange,
   Filters,
@@ -94,6 +95,7 @@ export class HistoryPanel {
   private pendingFocus: string | undefined;
   private pendingRebase: { head: string; label: string; branch: string | null } | undefined;
   private details = new Map<string, CommitDetail>();
+  private readonly commitItems = new Map<string, CommitItemLink[]>();
   private readonly parentIndex = new Map<string, number>();
   private readonly actions: CommitActionRunner;
   private repoSubscriptions: vscode.Disposable[] = [];
@@ -252,6 +254,14 @@ export class HistoryPanel {
           break;
         case 'selectCommit':
           await this.select(message.hash, message.parentIndex ?? 0);
+          break;
+        case 'openBoardItem':
+          await vscode.commands.executeCommand('gitStudio.boardOpenItem', {
+            uri: this.repo.repo.rootUri,
+            providerId: message.providerId,
+            kind: message.kind,
+            number: message.number
+          });
           break;
         case 'openFileDiff':
           await this.openFileDiff(message.hash, message.path, message.oldPath, message.status);
@@ -482,6 +492,7 @@ export class HistoryPanel {
     const cached = this.details.get(key);
     if (cached) {
       this.post({ type: 'detail', hash, detail: cached });
+      void this.postCommitItems(hash);
       return;
     }
 
@@ -496,8 +507,28 @@ export class HistoryPanel {
         }
       }
       this.post({ type: 'detail', hash, detail });
+      void this.postCommitItems(hash);
     } catch (error) {
       this.post({ type: 'detail', hash, detail: null, error: errorText(error) });
+    }
+  }
+
+  private async postCommitItems(hash: string): Promise<void> {
+    const cached = this.commitItems.get(hash);
+    if (cached) {
+      this.post({ type: 'commitItems', hash, items: cached });
+      return;
+    }
+    try {
+      const items = await vscode.commands.executeCommand<CommitItemLink[]>(
+        'gitStudio.boardFindCommitItems',
+        { root: this.repo.root, sha: hash }
+      );
+      const value = items ?? [];
+      this.commitItems.set(hash, value);
+      this.post({ type: 'commitItems', hash, items: value });
+    } catch (error) {
+      this.services.output.warn(`commit board lookup failed: ${errorText(error)}`);
     }
   }
 

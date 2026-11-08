@@ -120,6 +120,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await BoardPanel.show(services, context.secrets, board, { uri });
     }),
 
+    vscode.commands.registerCommand('gitStudio.boardOpenItem', async (arg: { uri?: vscode.Uri; providerId?: string; kind: 'issue' | 'pull' | 'discussion'; number: number }) => {
+      const uri = arg.uri ?? vscode.window.activeTextEditor?.document.uri;
+      await BoardPanel.show(services, context.secrets, board, {
+        uri,
+        focus: { providerId: arg.providerId, kind: arg.kind, number: arg.number }
+      });
+    }),
+
+    vscode.commands.registerCommand('gitStudio.boardFindCommitItems', async (arg: { root: string; sha: string }) =>
+      BoardPanel.findCommitItems(services, context.secrets, arg.root, arg.sha)
+    ),
+
     vscode.commands.registerCommand('gitStudio.boardInstallIntegration', async (arg?: { folder?: string; instance?: string; token?: string; login?: string }) => {
       await installIntegration(board, arg ?? {});
     }),
