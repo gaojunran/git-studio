@@ -169,6 +169,7 @@ export function DetailPane(props: Props) {
 
   return (
     <div className="detail">
+      <div className="detail__scroll">
       <div className="detail__header">
         <span className="mono detail__hash">{detail.hash.slice(0, 10)}</span>
         <button className="btn btn--small" onClick={() => props.onCopy(detail.hash)}>
@@ -362,6 +363,8 @@ export function DetailPane(props: Props) {
           )}
         </div>
       )}
+
+      </div>
 
       <div className="detail__footer">
         <button className="btn" onClick={props.onOpenChanges}>

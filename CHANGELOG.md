@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.23.2
+
+- Detail pane keeps the footer visible at the bottom; the message, metadata, linked items and files
+  scroll inside their own area instead of pushing `Open Changes` / `Compare` out of the window.
+
 ## 0.23.1
 
 - Clicking a commit in File History or Line History opens the native diff for that file instead of the
