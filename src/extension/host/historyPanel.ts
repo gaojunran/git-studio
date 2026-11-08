@@ -19,6 +19,7 @@ import { loadRefs } from '../git/refs';
 import { detectOperation, headOid, isConflict } from '../git/write';
 import { selectDefaultRefs, type DefaultRefMode } from '../history/defaultRefs';
 import { layoutGraph } from '../graph/layout';
+import { collapseLinearRows } from '../graph/collapse';
 import { parseSearchQuery } from '../../shared/search';
 import { CommitActionRunner } from './actions';
 import { renderHtml } from './html';
@@ -45,6 +46,7 @@ function emptyFilters(): Filters {
     caseSensitive: false,
     firstParent: false,
     noMerges: false,
+    collapseLinear: false,
     since: '',
     until: '',
     order: vscode.workspace.getConfiguration('gitStudio').get<'date' | 'topo'>('history.order', 'date')
@@ -81,6 +83,7 @@ export class HistoryPanel {
   private paths: string[] | undefined;
   private refs: RefInfo[] = [];
   private rows: CommitRow[] = [];
+  private rawRows: CommitRow[] = [];
   private rowHashes = new Set<string>();
   private graph: GraphRow[] = [];
   private hasMore = true;
@@ -186,6 +189,7 @@ export class HistoryPanel {
       this.paths = undefined;
       this.refs = [];
       this.rows = [];
+      this.rawRows = [];
       this.rowHashes.clear();
       this.graph = [];
       this.hasMore = true;
@@ -358,12 +362,17 @@ export class HistoryPanel {
     });
   }
 
+  private collapseRows(rows: CommitRow[]): CommitRow[] {
+    return this.filters.collapseLinear ? collapseLinearRows(rows) : rows;
+  }
+
   private async query(message: Extract<WebviewMessage, { type: 'query' }>): Promise<void> {
     if (!message.append) {
       this.abort?.abort();
       this.abort = new AbortController();
       this.token += 1;
       this.rows = [];
+      this.rawRows = [];
       this.rowHashes.clear();
       this.graph = [];
       this.hasMore = true;
@@ -423,15 +432,9 @@ export class HistoryPanel {
         ? result.rows.filter((row) => !this.rowHashes.has(row.hash))
         : result.rows;
 
-      if (message.append) {
-        for (const row of incoming) {
-          this.rowHashes.add(row.hash);
-        }
-        this.rows = [...this.rows, ...incoming];
-      } else {
-        this.rows = incoming;
-        this.rowHashes = new Set(incoming.map((row) => row.hash));
-      }
+      this.rawRows = message.append ? [...this.rawRows, ...incoming] : incoming;
+      this.rowHashes = new Set(this.rawRows.map((row) => row.hash));
+      this.rows = this.collapseRows(this.rawRows);
       this.graph = layoutGraph(this.rows, {
         pruneMissing: Boolean(
           this.filters.message ||
@@ -440,6 +443,7 @@ export class HistoryPanel {
             this.filters.since ||
             this.filters.until ||
             this.filters.noMerges ||
+            this.filters.collapseLinear ||
             this.paths
         )
       });
@@ -449,8 +453,8 @@ export class HistoryPanel {
       this.post({
         type: 'commits',
         requestId: message.requestId,
-        append: message.append,
-        rows: incoming,
+        append: this.filters.collapseLinear ? false : message.append,
+        rows: this.filters.collapseLinear ? this.rows : incoming,
         graph: this.graph,
         hasMore: this.hasMore,
         stale
@@ -679,6 +683,7 @@ export class HistoryPanel {
     };
     this.refSignature = '';
     this.rows = [];
+    this.rawRows = [];
     this.rowHashes.clear();
     this.graph = [];
     this.hasMore = true;
@@ -785,6 +790,7 @@ export class HistoryPanel {
     this.consumed = 0;
     this.filePath = undefined;
     this.rows = [];
+    this.rawRows = [];
     this.rowHashes.clear();
     this.graph = [];
     this.hasMore = true;
@@ -984,6 +990,7 @@ export class HistoryPanel {
     this.abort?.abort();
     this.token += 1;
     this.rows = [];
+    this.rawRows = [];
     this.rowHashes.clear();
     this.graph = [];
     this.hasMore = true;

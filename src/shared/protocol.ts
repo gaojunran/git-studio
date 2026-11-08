@@ -28,6 +28,7 @@ export interface Filters {
   caseSensitive: boolean;
   firstParent: boolean;
   noMerges: boolean;
+  collapseLinear: boolean;
   since: string;
   until: string;
   order: 'date' | 'topo';

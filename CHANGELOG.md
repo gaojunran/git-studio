@@ -2,6 +2,8 @@
 
 ## 0.18.0
 
+- A **Collapse** toggle hides the interior commits of linear side branches, keeping merge points and
+  refs, so a busy graph stays readable without losing the mainline.
 - Commit details add committer email, a separate commit date, GPG signature status and signer, and the
   refs pointing at the commit.
 - Commit message hashes are clickable and jump to that commit.

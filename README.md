@@ -16,6 +16,8 @@ place to learn and one source of truth for repository state.
   author, path, date, merge and ordering controls.
 - A **Linear** toggle hides merge commits but keeps every non-merge commit, so it matches the
   `No merges` filter instead of dropping whole merged branches.
+- A **Collapse** toggle hides interior commits of linear side branches and keeps their merge points,
+  branch heads and tags.
 - Bounded loading: 500 commits per page, with virtual scrolling and incremental graph layout.
 - Commit details: full message, parents, author and committer identity, authored and committed
   timestamps, GPG signature, refs pointing at the commit, changed files with per-file stats.

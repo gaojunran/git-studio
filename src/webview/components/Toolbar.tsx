@@ -78,6 +78,13 @@ export function Toolbar(props: Props) {
           Linear
         </button>
         <button
+          className={`btn ${filters.collapseLinear ? 'btn--active' : ''}`}
+          onClick={() => props.onChange({ collapseLinear: !filters.collapseLinear })}
+          title="Collapse linear side branches to their merge points and refs"
+        >
+          Collapse
+        </button>
+        <button
           className={`btn ${expanded || hasAdvancedFilters(filters) ? 'btn--active' : ''}`}
           onClick={() => setExpanded((value) => !value)}
           title="Toggle filters"

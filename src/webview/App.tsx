@@ -271,6 +271,7 @@ export function App() {
       caseSensitive: false,
       firstParent: false,
       noMerges: false,
+      collapseLinear: false,
       since: '',
       until: '',
       order: 'date'

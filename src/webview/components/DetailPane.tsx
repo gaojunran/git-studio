@@ -213,7 +213,7 @@ export function DetailPane(props: Props) {
             </dd>
           </>
         )}
-        {detail.contains.length > 0 && (
+        {(detail.contains?.length ?? 0) > 0 && (
           <>
             <dt>Refs here</dt>
             <dd className="meta__refs">
