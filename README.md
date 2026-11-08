@@ -14,7 +14,8 @@ place to learn and one source of truth for repository state.
   The search box accepts GitHub-style tokens: `author:`, `path:`, `since:`, `until:`, `hash:`,
   `is:merge`, `is:no-merge`, `first-parent:`, `regex:`, `case:`. The **Filters** panel adds structured
   author, path, date, merge and ordering controls.
-- A **Linear** toggle restricts the graph to the first-parent line without merge commits.
+- A **Linear** toggle hides merge commits but keeps every non-merge commit, so it matches the
+  `No merges` filter instead of dropping whole merged branches.
 - Bounded loading: 500 commits per page, with virtual scrolling and incremental graph layout.
 - Commit details: full message, parents, author/committer, changed files with per-file stats.
 - Merge commits: switch the diff base between parent 1 and parent 2.

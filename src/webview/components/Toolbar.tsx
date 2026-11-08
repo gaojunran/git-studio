@@ -32,7 +32,7 @@ function hasAdvancedFilters(filters: Filters): boolean {
 export function Toolbar(props: Props) {
   const { repo, refs, filters } = props;
   const [expanded, setExpanded] = useState(false);
-  const linear = filters.firstParent && filters.noMerges;
+  const linear = filters.noMerges;
 
   const selectedNames = filters.refs.map((name) =>
     refs.find((ref) => ref.name === name)?.shortName ??
@@ -72,8 +72,8 @@ export function Toolbar(props: Props) {
 
         <button
           className={`btn ${linear ? 'btn--active' : ''}`}
-          onClick={() => props.onChange({ firstParent: !linear, noMerges: !linear })}
-          title="Show only the first-parent line without merge commits"
+          onClick={() => props.onChange(linear ? { noMerges: false } : { noMerges: true, firstParent: false })}
+          title="Hide merge commits and show only the commits that carry changes"
         >
           Linear
         </button>

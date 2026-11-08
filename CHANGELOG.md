@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.5
+
+- `Linear` now only hides merge commits (`--no-merges`) instead of also applying `--first-parent`, so
+  commits from merged branches are no longer dropped.
+
 ## 0.16.4
 
 - Toolbar text is vertically centered in every button and the search input.
