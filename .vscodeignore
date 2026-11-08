@@ -8,6 +8,7 @@ docs/**
 TODO.md
 **/*.map
 **/*.test.ts
+dist/sidebar/**
 tsconfig*.json
 vite.config.mts
 vite.board.config.mts

@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.22.0",
+  "version": "0.22.1",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -23,40 +23,14 @@
   "extensionKind": [
     "workspace"
   ],
-  "activationEvents": [
-    "onView:gitStudio.sidebar"
-  ],
+  "activationEvents": [],
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "gitStudio",
-          "title": "Git Studio",
-          "icon": "resources/git-studio.svg"
-        }
-      ]
-    },
-    "views": {
-      "gitStudio": [
-        {
-          "id": "gitStudio.sidebar",
-          "name": "Workspace",
-          "type": "webview"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "gitStudio.openHistory",
         "title": "Open History",
         "category": "Git Studio",
         "icon": "$(history)"
-      },
-      {
-        "command": "gitStudio.openSidebar",
-        "title": "Focus Git Studio Sidebar",
-        "category": "Git Studio",
-        "icon": "$(source-control)"
       },
       {
         "command": "gitStudio.openBoard",
@@ -209,7 +183,8 @@
       {
         "command": "gitStudio.compareWorkingTree",
         "title": "Compare Working Tree with Merge Base…",
-        "category": "Git Studio"
+        "category": "Git Studio",
+        "icon": "$(git-compare)"
       },
       {
         "command": "gitStudio.diffRefs",
@@ -539,12 +514,12 @@
     }
   },
   "scripts": {
-    "build": "npm run build:ext && npm run build:web && npm run build:board && npm run build:sidebar",
+    "build": "npm run build:ext && npm run build:web && npm run build:board",
     "build:ext": "node esbuild.mjs",
     "build:web": "vite build",
     "build:board": "vite build --config vite.board.config.mts",
     "build:sidebar": "vite build --config vite.sidebar.config.mts",
-    "watch": "concurrently -n ext,web,board,sidebar -c blue,green,yellow,magenta \"node esbuild.mjs --watch\" \"vite build --watch\" \"vite build --watch --config vite.board.config.mts\" \"vite build --watch --config vite.sidebar.config.mts\"",
+    "watch": "concurrently -n ext,web,board -c blue,green,yellow \"node esbuild.mjs --watch\" \"vite build --watch\" \"vite build --watch --config vite.board.config.mts\"",
     "typecheck": "tsc -p tsconfig.extension.json --noEmit && tsc -p tsconfig.webview.json --noEmit",
     "test": "vitest run",
     "install:local": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out dist/git-studio-$npm_package_version.vsix && code --install-extension dist/git-studio-$npm_package_version.vsix --force",

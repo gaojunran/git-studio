@@ -154,21 +154,6 @@ The picker opens immediately and fills in after refs load. Lists are capped (20 
 40 remote, 20 tags); `Show all refs…` loads the rest on demand. Branches contained in the current
 branch are listed first inside each group, then the most recently updated ones.
 
-## Sidebar
-
-Git Studio adds a **Git Studio** activity-bar view that replaces the built-in Source Control view for day-to-day
-work, while History and the Board keep the parts that need more room:
-
-- repository switcher, branch switcher, ahead/behind, Fetch / Pull / Push / Publish
-- staged, changed, untracked and conflicted files with per-file and bulk stage, unstage and discard
-- native diff on click, stage hunk / selection still handled by the built-in Git diff editor
-- commit composer with Commit Staged / Commit All, Amend and Push after commit
-- in-progress merge / rebase / cherry-pick / revert banner with Continue / Skip / Abort
-- stash shortcuts and entries into the Stash and Worktree workbenches
-
-The built-in Source Control view can be hidden; Git Studio still relies on the built-in Git extension for
-`git:` documents, the diff editor and the merge editor.
-
 ## Issues and pull requests board
 
 The board opens as an editor panel and reads the active repository's remote. GitHub, GitLab, Gitea and

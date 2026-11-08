@@ -22,7 +22,6 @@ import { worktreeWorkbench } from './features/worktree';
 import { applyPatch, exportGraph, exportPatch } from './features/export';
 import { compareReflogEntry, reflogUndo, reflogWorkbench } from './features/reflog';
 import { HistoryPanel } from './host/historyPanel';
-import { SidebarProvider } from './sidebar/provider';
 import { stashWorkbench } from './features/stash';
 import { Journal } from './host/journal';
 import { RepoService } from './host/repoService';
@@ -100,7 +99,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   const annotate = new AnnotateController(services);
   services.annotate = annotate;
-  const sidebar = new SidebarProvider(services);
   const board = createBoardContext(context, output);
   activeBoard = board;
 
@@ -113,13 +111,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     output,
     repoService,
     annotate,
-    sidebar,
-    vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, sidebar, {
-      webviewOptions: { retainContextWhenHidden: true }
-    }),
-    vscode.commands.registerCommand('gitStudio.openSidebar', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.gitStudio');
-    }),
     repoService.onDidChangeRepositories(updateContext),
     vscode.workspace.registerTextDocumentContentProvider('gitstudio-empty', {
       provideTextDocumentContent: () => ''

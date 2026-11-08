@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.1
+
+- Removed the Git Studio activity-bar sidebar and its `Focus Git Studio Sidebar` command; the built-in
+  Source Control view is used for workspace operations. The sidebar source is kept for later reuse.
+- Fixed `Compare Working Tree with Merge Base…` showing as a wide text button in the Source Control
+  title bar by giving it a `git-compare` codicon.
+
 ## 0.22.0
 
 - New Git Studio activity-bar sidebar that replaces the built-in Source Control view: repository and
