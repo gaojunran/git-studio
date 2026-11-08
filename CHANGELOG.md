@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.2
+
+- Fixed the missing icon on the `Rebase Current Branch onto This Commit…` menu item (`git-rebase` is
+  not a VS Code codicon; it now uses `repo-push`).
+
 ## 0.17.1
 
 - Change request titles render `#123`, `!123` and URLs as links; clicking a reference opens that item

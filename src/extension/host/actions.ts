@@ -68,7 +68,7 @@ export class CommitActionRunner {
       { id: 'revert', label: '$(history) Revert Commit…' },
       { id: 'cherry-pick', label: '$(git-commit) Cherry-pick onto Current Branch…' },
       { id: 'merge', label: '$(git-merge) Merge Commit into Current Branch…' },
-      { id: 'rebase-onto', label: '$(git-rebase) Rebase Current Branch onto This Commit…' },
+      { id: 'rebase-onto', label: '$(repo-push) Rebase Current Branch onto This Commit…' },
       { id: 'reword', label: '$(edit) Reword Commit…' },
       { id: 'squash', label: '$(fold) Squash Commit into Parent…' },
       { id: 'drop', label: '$(trash) Drop Commit…' },
