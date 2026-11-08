@@ -492,7 +492,7 @@ export class HistoryPanel {
     const cached = this.details.get(key);
     if (cached) {
       this.post({ type: 'detail', hash, detail: cached });
-      void this.postCommitItems(hash);
+      void this.postCommitItems(hash, cached);
       return;
     }
 
@@ -507,16 +507,22 @@ export class HistoryPanel {
         }
       }
       this.post({ type: 'detail', hash, detail });
-      void this.postCommitItems(hash);
+      void this.postCommitItems(hash, detail);
     } catch (error) {
       this.post({ type: 'detail', hash, detail: null, error: errorText(error) });
     }
   }
 
-  private async postCommitItems(hash: string): Promise<void> {
+  private async postCommitItems(hash: string, detail?: CommitDetail): Promise<void> {
     const cached = this.commitItems.get(hash);
     if (cached) {
       this.post({ type: 'commitItems', hash, items: cached });
+      return;
+    }
+    // A merge or squash commit already names its change request; don't spend an API call on it.
+    if (detail && /(?:^|\s)[!#]\d+|https?:\/\/[^\s]+\/(?:pull|issues|merge_requests|-\/merge_requests)\/\d+/i.test(detail.message)) {
+      this.commitItems.set(hash, []);
+      this.post({ type: 'commitItems', hash, items: [] });
       return;
     }
     try {

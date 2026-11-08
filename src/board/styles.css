@@ -1067,6 +1067,19 @@ svg {
   overflow-wrap: anywhere;
 }
 
+.title-ref {
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  font: inherit;
+  cursor: pointer;
+}
+
+.title-ref:hover {
+  text-decoration: underline;
+}
+
 .state {
   display: inline-flex;
   align-items: center;

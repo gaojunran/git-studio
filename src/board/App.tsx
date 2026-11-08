@@ -303,6 +303,51 @@ function ReviewerChip({ author, onRemove, disabled }: { author: BoardAuthor; onR
   );
 }
 
+function TitleText({
+  text,
+  onOpenItem,
+  onOpenUrl
+}: {
+  text: string;
+  onOpenItem: (kind: BoardKind, number: number) => void;
+  onOpenUrl: (url: string) => void;
+}) {
+  const parts: ReactNode[] = [];
+  const pattern = /(https?:\/\/[^\s)]+|(?<![\w])!\d+|(?<![\w])#\d+)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = pattern.exec(text))) {
+    if (match.index > last) {
+      parts.push(text.slice(last, match.index));
+    }
+    const token = match[0];
+    const key = `title-${index++}`;
+    if (token.startsWith('http')) {
+      parts.push(
+        <a key={key} href={token} onClick={(event) => { event.preventDefault(); onOpenUrl(token); }}>{token}</a>
+      );
+    } else {
+      const number = Number(token.slice(1));
+      parts.push(
+        <button
+          key={key}
+          type="button"
+          className="title-ref"
+          onClick={() => onOpenItem(token.startsWith('!') ? 'pull' : 'issue', number)}
+        >
+          {token}
+        </button>
+      );
+    }
+    last = match.index + token.length;
+  }
+  if (last < text.length) {
+    parts.push(text.slice(last));
+  }
+  return <>{parts}</>;
+}
+
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
@@ -1356,6 +1401,7 @@ function DetailPane({
   onVote,
   onReply,
   onOpen,
+  onOpenItem,
   onCopy,
   onRefresh
 }: {
@@ -1379,6 +1425,7 @@ function DetailPane({
   onVote: (votes: Record<string, number>) => void;
   onReply: (threadId: string, body: string) => void;
   onOpen: (url: string) => void;
+  onOpenItem: (kind: BoardKind, number: number) => void;
   onCopy: (text: string) => void;
   onRefresh: () => void;
 }) {
@@ -1485,7 +1532,7 @@ function DetailPane({
             </button>
           </div>
         </div>
-        <h1 className="detail__title">{detail.title}</h1>
+        <h1 className="detail__title"><TitleText text={detail.title} onOpenItem={onOpenItem} onOpenUrl={onOpen} /></h1>
       </header>
 
       <div className="detail__body">
@@ -2614,6 +2661,7 @@ export function App() {
                 }}
                 onReply={(threadId, body) => post({ type: 'reviewReply', threadId, body })}
                     onOpen={(url) => post({ type: 'openExternal', url })}
+                    onOpenItem={(itemKind, number) => selectItem({ kind: itemKind, number } as BoardItemSummary)}
                     onCopy={(text) => post({ type: 'copy', text })}
                     onRefresh={() => post({ type: 'refresh' })}
                   />

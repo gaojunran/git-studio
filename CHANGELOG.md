@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1
+
+- Change request titles render `#123`, `!123` and URLs as links; clicking a reference opens that item
+  in the board.
+- History skips the commit-to-change-request API lookup when the commit message already names one.
+
 ## 0.17.0
 
 - Board now uses VS Code theme variables for backgrounds, text, borders, links and semantic colors in
