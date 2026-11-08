@@ -49,8 +49,18 @@
 - Guest Host 的 `source-control` 契约没有 review thread 的创建/回复方法；因此 guest provider 只能展示 provider 返回的线程，GitHub 内置 provider 支持回复。
 - Guest Host 的 tracker 契约没有项目映射 UI；容器名称会展示，映射由 OpenChamber 宿主负责。
 - `--rebase-merges` 未启用：交互式 rebase 仍按 `--no-merges` 展平 merge commit，因为自定义 todo 与 git 的 merge label 语义无法安全混用。
-- lane folding 未实现：复杂历史仍通过 primary refs、分组限量和 lane 间距自适应控制密度。
-- 上一版本 blame 未提供独立命令；可用 Reflog / 文件历史打开旧提交后查看。
+- 当前 **Collapse** 只隐藏侧分支内部提交，不是把一条侧分支折叠成一行摘要；真正的 lane folding 仍未实现。
+- 大仓库 `loadRefs` 冷启动仍在 1s 量级；ref picker 已改为异步填充，不阻塞弹窗。
+
+## 后续候选（未排期）
+
+- 交互式 rebase 支持 `--rebase-merges`，保留 merge commit 结构。
+- 真正的 lane folding：把无可见节点的侧分支折叠成一条灰色摘要行，可展开。
+- 向 OpenChamber 上游提议 guest 契约：commit → MR 批量反查、review threads 读写、逐条 checks、close reason、timeline DTO。
+- Board：创建/编辑 PR/MR、submit requirements、Gerrit revisions、附件上传。
+- History：多仓库统一 Log + root 颜色、分支面板 / favorite branches。
+- 性能：只有在实测解析或 layout 占关键路径 ≥40% 且优化后仍 ≥2× 时才考虑 worker / Rust。
+- Marketplace 发布与自动更新。
 
 ## 非目标（明确不做）
 
