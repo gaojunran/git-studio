@@ -540,16 +540,39 @@ select.input {
   color: var(--vscode-descriptionForeground);
 }
 
-.detail__body pre {
+.detail__body-text {
   margin: 0;
   max-height: 160px;
   overflow: hidden;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: inherit;
 }
 
-.detail__body--expanded pre {
+.detail__body--expanded .detail__body-text {
+  max-height: none;
+}
+
+.hash-link {
+  font-size: inherit;
+  padding: 0 1px;
+  vertical-align: baseline;
+}
+
+.meta__refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.meta__ref {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 10px;
+}
+
+.detail__body--expanded .detail__body-text {
   max-height: none;
 }
 

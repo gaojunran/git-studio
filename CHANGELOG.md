@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.0
+
+- Commit details add committer email, a separate commit date, GPG signature status and signer, and the
+  refs pointing at the commit.
+- Commit message hashes are clickable and jump to that commit.
+- `←` / `→` jump to the parent / child commit while the history list has focus.
+- Each changed file gets `Compare with Working Tree` and `Compare before with Working Tree` actions
+  beside the existing diff, history and open-at-revision buttons.
+
 ## 0.17.2
 
 - Fixed the missing icon on the `Rebase Current Branch onto This Commit…` menu item (`git-rebase` is

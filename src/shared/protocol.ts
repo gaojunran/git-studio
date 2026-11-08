@@ -93,6 +93,10 @@ export interface CommitDetail {
   committerName: string;
   committerEmail: string;
   commitDate: number;
+  signature: string | null;
+  signer: string | null;
+  /** Branches and tags that point at this commit. */
+  contains: string[];
   files: FileChange[];
   additions: number;
   deletions: number;
@@ -169,6 +173,7 @@ export type WebviewMessage =
   | { type: 'query'; requestId: number; append: boolean; filters: Filters; skip: number; limit: number }
   | { type: 'selectCommit'; hash: string; parentIndex?: number }
   | { type: 'openFileDiff'; hash: string; path: string; oldPath?: string; status: ChangeStatus }
+  | { type: 'openFileWithLocal'; hash: string; path: string; oldPath?: string; status: ChangeStatus; before?: boolean }
   | { type: 'openCommitChanges'; hash: string }
   | { type: 'commitActions'; hash: string }
   | { type: 'abortOperation' }

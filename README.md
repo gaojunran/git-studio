@@ -17,7 +17,11 @@ place to learn and one source of truth for repository state.
 - A **Linear** toggle hides merge commits but keeps every non-merge commit, so it matches the
   `No merges` filter instead of dropping whole merged branches.
 - Bounded loading: 500 commits per page, with virtual scrolling and incremental graph layout.
-- Commit details: full message, parents, author/committer, changed files with per-file stats.
+- Commit details: full message, parents, author and committer identity, authored and committed
+  timestamps, GPG signature, refs pointing at the commit, changed files with per-file stats.
+  `←` / `→` jump to the parent or child commit, and hashes in the message are links.
+- Per-file actions: diff, compare with working tree, compare the parent with working tree, file
+  history, open at this revision and copy path.
 - Merge commits: switch the diff base between parent 1 and parent 2.
 - Open a commit as a native multi-file diff; compare any two commits.
 - Clicking a file in the detail pane opens its diff beside the history panel as a preview tab, so the

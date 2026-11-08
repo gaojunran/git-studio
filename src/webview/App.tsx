@@ -223,6 +223,34 @@ export function App() {
     post({ type: 'selectCommit', hash, parentIndex });
   };
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"], .splitter')) {
+        return;
+      }
+      const current = selectedRef.current;
+      if (!current) {
+        return;
+      }
+      if (event.key === 'ArrowLeft' && detail?.parents[0]) {
+        event.preventDefault();
+        select(detail.parents[0]);
+      } else if (event.key === 'ArrowRight') {
+        const child = rows.find((row) => row.parents.includes(current));
+        if (child) {
+          event.preventDefault();
+          select(child.hash);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [rows, detail]);
+
   const toggleCompare = (hash: string) => {
     setCompare((previous) => (previous === hash ? null : hash));
   };
@@ -332,6 +360,7 @@ export function App() {
           selected={selected}
           compare={compare}
           onSelectParent={select}
+          onOpenCommit={select}
           onSelectParentIndex={(index) => selected && select(selected, index)}
           onOpenFileDiff={(file) =>
             selected &&
@@ -341,6 +370,17 @@ export function App() {
               path: file.path,
               oldPath: file.oldPath,
               status: file.status
+            })
+          }
+          onOpenFileWithLocal={(file, before) =>
+            selected &&
+            post({
+              type: 'openFileWithLocal',
+              hash: selected,
+              path: file.path,
+              oldPath: file.oldPath,
+              status: file.status,
+              before
             })
           }
           onOpenFileHistory={(filePath) => selected && post({ type: 'openFileHistory', path: filePath, hash: selected })}

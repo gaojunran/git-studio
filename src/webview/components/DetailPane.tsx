@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { CommitDetail, CommitItemLink, FileChange } from '../../shared/protocol';
 import { formatDateTime } from '../format';
 
@@ -10,8 +11,10 @@ interface Props {
   selected: string | null;
   compare: string | null;
   onSelectParent: (hash: string) => void;
+  onOpenCommit: (hash: string) => void;
   onSelectParentIndex: (index: number) => void;
   onOpenFileDiff: (file: FileChange) => void;
+  onOpenFileWithLocal: (file: FileChange, before: boolean) => void;
   onOpenFileHistory: (filePath: string) => void;
   onOpenFileAtRevision: (filePath: string) => void;
   onOpenChanges: () => void;
@@ -88,6 +91,36 @@ export function messageLinks(message: string, items: CommitItemLink[]): MessageL
   return links;
 }
 
+function renderHashes(text: string, keyPrefix: string, onOpenCommit: (hash: string) => void): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const pattern = /\b[0-9a-f]{7,40}\b/gi;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = pattern.exec(text))) {
+    const token = match[0];
+    if (match.index > last) {
+      parts.push(text.slice(last, match.index));
+    }
+    parts.push(
+      <button
+        key={`${keyPrefix}-hash-${index++}`}
+        type="button"
+        className="btn btn--link mono hash-link"
+        title={`Go to ${token}`}
+        onClick={() => onOpenCommit(token)}
+      >
+        {token}
+      </button>
+    );
+    last = match.index + token.length;
+  }
+  if (last < text.length) {
+    parts.push(text.slice(last));
+  }
+  return parts;
+}
+
 export function DetailPane(props: Props) {
   const { detail, loading, error, selected, compare } = props;
   const [expanded, setExpanded] = useState(false);
@@ -143,10 +176,10 @@ export function DetailPane(props: Props) {
         </button>
       </div>
 
-      <div className="detail__subject">{subject}</div>
+      <div className="detail__subject">{renderHashes(subject, 'subject', props.onOpenCommit)}</div>
       {body && (
         <div className={`detail__body ${expanded ? 'detail__body--expanded' : ''}`}>
-          <pre>{body}</pre>
+          <div className="detail__body-text">{renderHashes(body, 'body', props.onOpenCommit)}</div>
           {!expanded && body.length > 400 && (
             <button className="btn btn--link" onClick={() => setExpanded(true)}>
               Show more
@@ -161,11 +194,35 @@ export function DetailPane(props: Props) {
           {detail.authorName} <span className="muted">&lt;{detail.authorEmail}&gt;</span>
         </dd>
         <dt>Date</dt>
-        <dd>{formatDateTime(detail.authorDate)}</dd>
+        <dd>
+          {formatDateTime(detail.authorDate)}
+          <span className="muted"> authored</span>
+        </dd>
         <dt>Committer</dt>
         <dd>
-          {detail.committerName} <span className="muted">{formatDateTime(detail.commitDate)}</span>
+          {detail.committerName} <span className="muted">&lt;{detail.committerEmail}&gt;</span>
         </dd>
+        <dt>Commit date</dt>
+        <dd>{formatDateTime(detail.commitDate)}</dd>
+        {detail.signature && (
+          <>
+            <dt>Signature</dt>
+            <dd>
+              <span className="mono">{detail.signature}</span>
+              {detail.signer ? <span className="muted"> {detail.signer}</span> : null}
+            </dd>
+          </>
+        )}
+        {detail.contains.length > 0 && (
+          <>
+            <dt>Refs here</dt>
+            <dd className="meta__refs">
+              {detail.contains.map((ref) => (
+                <span key={ref} className="meta__ref">{ref}</span>
+              ))}
+            </dd>
+          </>
+        )}
         <dt>Parents</dt>
         <dd className="meta__parents">
           {detail.parents.length === 0 && <span className="muted">root commit</span>}
@@ -263,6 +320,26 @@ export function DetailPane(props: Props) {
                   }}
                 >
                   ⧉
+                </button>
+                <button
+                  className="btn btn--icon btn--tiny"
+                  title="Compare with Working Tree"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onOpenFileWithLocal(file, false);
+                  }}
+                >
+                  ⇄
+                </button>
+                <button
+                  className="btn btn--icon btn--tiny"
+                  title="Compare before with Working Tree"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onOpenFileWithLocal(file, true);
+                  }}
+                >
+                  ⇆
                 </button>
                 <button
                   className="btn btn--icon btn--tiny"

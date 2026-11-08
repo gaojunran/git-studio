@@ -24,7 +24,7 @@ import { CommitActionRunner } from './actions';
 import { renderHtml } from './html';
 import type { RepoHandle } from './repoService';
 import type { Services } from './services';
-import { emptyUri, gitUri as toGitUri } from './uris';
+import { emptyUri, gitUri as toGitUri, worktreeUri } from './uris';
 
 const PAGE_SIZE = 500;
 
@@ -265,6 +265,9 @@ export class HistoryPanel {
           break;
         case 'openFileDiff':
           await this.openFileDiff(message.hash, message.path, message.oldPath, message.status);
+          break;
+        case 'openFileWithLocal':
+          await this.openFileWithLocal(message.hash, message.path, message.oldPath, message.status, message.before === true);
           break;
         case 'openCommitChanges':
           await this.openCommitChanges(message.hash);
@@ -589,6 +592,37 @@ export class HistoryPanel {
       left,
       right,
       `${path.basename(filePath)} (${shortHash(hash)})`,
+      { viewColumn: vscode.ViewColumn.Beside, preview: true }
+    );
+  }
+
+  private async openFileWithLocal(
+    hash: string,
+    filePath: string,
+    oldPath: string | undefined,
+    status: FileChange['status'],
+    before: boolean
+  ): Promise<void> {
+    const detail = await this.detailFor(hash);
+    if (!detail) {
+      return;
+    }
+    const oldFile = oldPath ?? filePath;
+    const parent = detail.parents[detail.parentIndex];
+    const left = before
+      ? parent
+        ? this.gitUri(oldFile, parent)
+        : emptyUri(oldFile)
+      : status === 'A'
+        ? emptyUri(oldFile)
+        : this.gitUri(oldFile, hash);
+    const right = status === 'D' ? emptyUri(filePath) : worktreeUri(this.repo, filePath);
+    const label = before ? 'before' : shortHash(hash);
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      left,
+      right,
+      `${path.basename(filePath)} (${label} ↔ Working Tree)`,
       { viewColumn: vscode.ViewColumn.Beside, preview: true }
     );
   }
