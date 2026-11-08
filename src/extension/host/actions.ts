@@ -476,6 +476,66 @@ export class CommitActionRunner {
     void vscode.window.showInformationMessage(`Git Studio: pushed ${remote}/${remoteBranch} up to ${shortHash(hash)}.`);
   }
 
+  async dropFile(hash: string, detail: CommitDetail | undefined, filePath: string): Promise<void> {
+    const answer = await vscode.window.showWarningMessage(
+      `Drop the changes to ${filePath} from ${shortHash(hash)}? This rewrites the current branch.`,
+      { modal: true },
+      'Drop'
+    );
+    if (answer !== 'Drop') {
+      return;
+    }
+    await this.rewriteFile(hash, detail, filePath, 'drop');
+  }
+
+  async extractFile(hash: string, detail: CommitDetail | undefined, filePath: string): Promise<void> {
+    const message = await vscode.window.showInputBox({
+      prompt: `Message for the extracted commit (${filePath})`,
+      value: `Extract changes to ${filePath}`
+    });
+    if (message === undefined) {
+      return;
+    }
+    await this.rewriteFile(hash, detail, filePath, 'extract', message);
+  }
+
+  private async rewriteFile(
+    hash: string,
+    detail: CommitDetail | undefined,
+    filePath: string,
+    mode: 'drop' | 'extract',
+    message?: string
+  ): Promise<void> {
+    const repo = this.getRepo();
+    const parent = detail?.parents[0];
+    if (!parent) {
+      void vscode.window.showErrorMessage('Git Studio: a root commit cannot be rewritten this way.');
+      return;
+    }
+    const plan = await buildRebasePlan(this.services.runner, repo.root, parent);
+    if (plan.error) {
+      throw new Error(plan.error);
+    }
+    const item = plan.items.find((candidate) => candidate.hash === hash);
+    if (!item) {
+      throw new Error('The commit is not on the current first-parent line.');
+    }
+    if (mode === 'drop') {
+      item.dropFile = filePath;
+    } else {
+      item.extractFile = filePath;
+      item.extractMessage = message;
+    }
+
+    const before = plan.head;
+    const result = await this.services.writes.rebase(repo.root, plan, before);
+    await this.record(`${mode} ${filePath} from ${shortHash(hash)}`, before);
+    await this.onChanged();
+    if (result === 'stopped') {
+      void vscode.window.showWarningMessage('Git Studio: the rewrite stopped on a conflict. Resolve it, then Continue or Abort.');
+    }
+  }
+
   private async merge(hash: string): Promise<void> {
     const repo = this.getRepo();
     const head = await headOid(this.services.runner, repo.root);

@@ -32,6 +32,8 @@ export interface Filters {
   since: string;
   until: string;
   order: 'date' | 'topo';
+  /** Inclusive 1-based line range for `git log -L`, e.g. "10,20". */
+  lineRange?: string;
 }
 
 export interface CommitRow {
@@ -120,6 +122,12 @@ export interface RebaseItem {
   action: RebaseAction;
   /** Replacement message for reword. */
   message?: string;
+  /** Drop this path's changes from the commit. */
+  dropFile?: string;
+  /** Extract this path's changes into a new commit. */
+  extractFile?: string;
+  /** Message for the extracted commit. */
+  extractMessage?: string;
 }
 
 export interface RebasePlan {

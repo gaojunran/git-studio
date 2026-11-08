@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0
+
+- `Git Studio: History for Selection` follows the selected line range with `git log -L`; the range can
+  be edited or cleared from the Filters panel.
+- Changed files can be annotated at the selected revision; annotate now accepts `git:` documents and
+  blames the requested ref.
+- Changed files can drop their changes from a commit or extract them into a new commit, both through
+  the rebase todo (`exec git checkout <hash>^ -- <path>`), with conflict Continue/Skip/Abort.
+
 ## 0.19.0
 
 - Commit menu adds `Fixup Staged Changes into This Commit`, `Squash Staged Changes into This Commit`

@@ -8,6 +8,14 @@ function record(fields: string[]): string {
   return `${fields.join(FIELD)}${RECORD}`;
 }
 
+describe('buildLogArgs', () => {
+  it('uses -L for a line range instead of a pathspec', () => {
+    const args = buildLogArgs({ refs: [], path: 'src/a.ts', lineRange: '10,20', skip: 0, limit: 50 });
+    expect(args).toContain('-L10,20:src/a.ts');
+    expect(args).not.toContain('--');
+  });
+});
+
 describe('parseLog', () => {
   it('parses commits, parents, refs and unicode subjects', () => {
     const stdout =

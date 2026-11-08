@@ -2,7 +2,7 @@
   "name": "git-studio",
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "publisher": "local",
   "license": "MIT",
   "engines": {
@@ -78,6 +78,12 @@
         "title": "File History",
         "category": "Git Studio",
         "icon": "$(history)"
+      },
+      {
+        "command": "gitStudio.selectionHistory",
+        "title": "History for Selection",
+        "category": "Git Studio",
+        "icon": "$(list-selection)"
       },
       {
         "command": "gitStudio.annotateFile",
@@ -348,6 +354,11 @@
       "editor/context": [
         {
           "command": "gitStudio.fileHistory",
+          "when": "resourceScheme == file",
+          "group": "9_git@1"
+        },
+        {
+          "command": "gitStudio.selectionHistory",
           "when": "resourceScheme == file",
           "group": "9_git@1"
         },

@@ -34,6 +34,7 @@ interface ShowOptions {
   fileUri?: vscode.Uri;
   paths?: string[];
   focus?: string;
+  lineRange?: string;
 }
 
 function emptyFilters(): Filters {
@@ -49,6 +50,7 @@ function emptyFilters(): Filters {
     collapseLinear: false,
     since: '',
     until: '',
+    lineRange: undefined,
     order: vscode.workspace.getConfiguration('gitStudio').get<'date' | 'topo'>('history.order', 'date')
   };
 }
@@ -144,6 +146,7 @@ export class HistoryPanel {
     this.repo = repo;
     this.filters = emptyFilters();
     this.filePath = options.fileUri ? services.repoService.relativePath(repo, options.fileUri) : undefined;
+    this.filters.lineRange = options.lineRange;
     this.paths = options.paths?.filter(Boolean);
     if (this.paths && this.paths.length > 0) {
       this.filters.path = this.paths.length === 1 ? this.paths[0] : this.paths.join(', ');
@@ -219,10 +222,13 @@ export class HistoryPanel {
           ...this.filters,
           path: relative,
           message: '',
-          author: ''
+          author: '',
+          lineRange: options.lineRange
         };
         this.refSignature = '';
-        this.panel.title = `History: ${path.basename(relative)}`;
+        this.panel.title = options.lineRange
+          ? `History: ${path.basename(relative)} lines ${options.lineRange}`
+          : `History: ${path.basename(relative)}`;
       }
     }
 
@@ -427,6 +433,7 @@ export class HistoryPanel {
         mergesOnly: Boolean(search.mergesOnly),
         since: this.filters.since || search.since || undefined,
         until: this.filters.until || search.until || undefined,
+        lineRange: this.filters.lineRange,
         order: this.filters.order,
         skip,
         limit
@@ -673,10 +680,13 @@ export class HistoryPanel {
         { id: 'before', label: '$(compare-changes) Compare Before with Working Tree' },
         { id: 'history', label: '$(history) File History' },
         { id: 'revision', label: '$(go-to-file) Open at This Revision' },
+        { id: 'annotate', label: '$(symbol-parameter) Annotate This Revision' },
         { id: 'copy', label: '$(copy) Copy Path' },
         { id: 'restore', label: '$(cloud-download) Get This File from This Revision' },
         { id: 'revert', label: '$(discard) Revert This File\u2019s Changes' },
-        { id: 'cherry-pick', label: '$(git-commit) Apply This File\u2019s Changes to Working Tree' }
+        { id: 'cherry-pick', label: '$(git-commit) Apply This File\u2019s Changes to Working Tree' },
+        { id: 'drop', label: '$(trash) Drop This File\u2019s Changes from the Commit' },
+        { id: 'extract', label: '$(split-horizontal) Extract This File\u2019s Changes to a New Commit' }
       ],
       { title: `${path.basename(filePath)} · ${shortHash(hash)}`, placeHolder: 'Choose a file action' }
     );
@@ -704,6 +714,9 @@ export class HistoryPanel {
       case 'revision':
         await this.openFileAtRevision(hash, filePath);
         return;
+      case 'annotate':
+        await this.annotateRevision(hash, filePath);
+        return;
       case 'copy':
         await vscode.env.clipboard.writeText(filePath);
         return;
@@ -715,6 +728,12 @@ export class HistoryPanel {
         return;
       case 'cherry-pick':
         await this.applyFileChanges(file, hash, false);
+        return;
+      case 'drop':
+        await this.actions.dropFile(hash, await this.detailFor(hash), filePath);
+        return;
+      case 'extract':
+        await this.actions.extractFile(hash, await this.detailFor(hash), filePath);
         return;
     }
   }
@@ -732,6 +751,20 @@ export class HistoryPanel {
       this.post({ type: 'filePreview', hash, path: filePath, patch });
     } catch (error) {
       this.post({ type: 'filePreview', hash, path: filePath, patch: '', error: errorText(error) });
+    }
+  }
+
+  private async annotateRevision(hash: string, filePath: string): Promise<void> {
+    try {
+      const uri = this.gitUri(filePath, hash);
+      const document = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(document, {
+        preview: true,
+        viewColumn: vscode.ViewColumn.Beside
+      });
+      await this.services.annotate?.show(editor);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Git Studio: cannot annotate ${filePath} at ${shortHash(hash)}: ${errorText(error)}`);
     }
   }
 
@@ -814,7 +847,8 @@ export class HistoryPanel {
       ...this.filters,
       path: filePath,
       message: '',
-      author: ''
+      author: '',
+      lineRange: undefined
     };
     this.refSignature = '';
     this.rows = [];

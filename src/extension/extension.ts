@@ -98,6 +98,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     extensionUri: context.extensionUri
   };
   const annotate = new AnnotateController(services);
+  services.annotate = annotate;
   const board = createBoardContext(context, output);
   activeBoard = board;
 
@@ -163,6 +164,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('gitStudio.openHistory', async (arg?: unknown) => {
       const uri = uriFromArg(arg) ?? vscode.window.activeTextEditor?.document.uri;
       await HistoryPanel.show(services, { repo: uri ? repoService.forUri(uri) : undefined });
+    }),
+
+    vscode.commands.registerCommand('gitStudio.selectionHistory', async (arg?: unknown) => {
+      const editor = vscode.window.activeTextEditor;
+      const uri = uriFromArg(arg) ?? editor?.document.uri;
+      if (!uri || !editor) {
+        void vscode.window.showWarningMessage('Git Studio: open a file and select lines to show their history.');
+        return;
+      }
+      const selection = editor.selection;
+      const start = Math.min(selection.start.line, selection.end.line) + 1;
+      const end = Math.max(selection.start.line, selection.end.line) + 1;
+      await HistoryPanel.show(services, { fileUri: uri, lineRange: `${start},${end}` });
     }),
 
     vscode.commands.registerCommand('gitStudio.fileHistory', async (arg?: unknown) => {

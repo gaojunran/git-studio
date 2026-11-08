@@ -105,6 +105,20 @@ export function buildTodo(plan: RebasePlan, dir: string): string {
       continue;
     }
 
+    if (item.dropFile) {
+      lines.push(`pick ${item.hash}`);
+      lines.push(`exec git checkout ${item.hash}^ -- ${shellQuote(item.dropFile)} && git commit --amend --no-edit`);
+      continue;
+    }
+
+    if (item.extractFile) {
+      const message = item.extractMessage?.trim() || `Extract changes to ${item.extractFile}`;
+      lines.push(`pick ${item.hash}`);
+      lines.push(`exec git checkout ${item.hash}^ -- ${shellQuote(item.extractFile)} && git commit --amend --no-edit`);
+      lines.push(`exec git checkout ${item.hash} -- ${shellQuote(item.extractFile)} && git commit -m ${shellQuote(message)}`);
+      continue;
+    }
+
     lines.push(`${item.action} ${item.hash}`);
   }
   return `${lines.join('\n')}\n`;

@@ -24,7 +24,9 @@ place to learn and one source of truth for repository state.
   `←` / `→` jump to the parent or child commit, and hashes in the message are links.
 - Per-file actions live in one `⋯` menu: inline diff preview, diff, compare with working tree,
   compare the parent with working tree, file history, open at this revision, copy path, restore from
-  this revision, revert this file's changes, and apply this file's changes to the working tree.
+  this revision, revert this file's changes, apply this file's changes to the working tree, drop this
+  file's changes from the commit, extract this file's changes into a new commit, and annotate at this
+  revision.
 - Merge commits: switch the diff base between parent 1 and parent 2.
 - Open a commit as a native multi-file diff; compare any two commits.
 - Clicking a file in the detail pane opens its diff beside the history panel as a preview tab, so the
@@ -74,6 +76,7 @@ place to learn and one source of truth for repository state.
 | --- | --- |
 | `Git Studio: Open History` | Open the history panel for the active repository. |
 | `Git Studio: File History` | Show history for a file. |
+| `Git Studio: History for Selection` | Show history for the selected line range (`git log -L`). |
 | `Git Studio: Annotate File (Blame)` | Toggle full-file blame annotations. |
 | `Git Studio: Toggle File Annotate` | Toggle annotations for the active editor. |
 | `Git Studio: Open Commit in History` | Reveal a commit in the history panel. |

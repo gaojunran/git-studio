@@ -16,6 +16,7 @@ export interface LogQuery {
   noMerges?: boolean;
   since?: string;
   until?: string;
+  lineRange?: string;
   order?: 'date' | 'topo';
   skip: number;
   limit: number;
@@ -115,6 +116,8 @@ export function buildLogArgs(query: LogQuery): string[] {
 
   if (query.paths && query.paths.length > 0) {
     args.push('--', ...query.paths.map((path) => `:(literal)${path}`));
+  } else if (query.lineRange && query.path) {
+    args.push(`-L${query.lineRange}:${query.path}`);
   } else if (query.path) {
     args.push('--', `:(literal)${query.path}`);
   }

@@ -25,6 +25,7 @@ function hasAdvancedFilters(filters: Filters): boolean {
       filters.caseSensitive ||
       filters.firstParent ||
       filters.noMerges ||
+      filters.lineRange ||
       filters.order !== 'date'
   );
 }
@@ -149,6 +150,17 @@ export function Toolbar(props: Props) {
               type="date"
               value={filters.until}
               onChange={(event) => props.onChange({ until: event.target.value })}
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">Lines</span>
+            <input
+              className="input"
+              value={filters.lineRange ?? ''}
+              placeholder="10,20"
+              onChange={(event) => props.onChange({ lineRange: event.target.value || undefined })}
+              spellCheck={false}
             />
           </label>
 

@@ -59,7 +59,7 @@ export async function loadBlame(
   runner: GitRunner,
   cwd: string,
   filePath: string,
-  options: { ignoreWhitespace?: boolean; detectMoves?: boolean; detectCopies?: boolean; ignoreRevsFile?: string } = {},
+  options: { ignoreWhitespace?: boolean; detectMoves?: boolean; detectCopies?: boolean; ignoreRevsFile?: string; ref?: string } = {},
   signal?: AbortSignal
 ): Promise<BlameLine[]> {
   const args = ['blame', '--line-porcelain'];
@@ -74,6 +74,9 @@ export async function loadBlame(
   }
   if (options.ignoreRevsFile?.trim()) {
     args.push(`--ignore-revs-file=${options.ignoreRevsFile.trim()}`);
+  }
+  if (options.ref) {
+    args.push(options.ref);
   }
   args.push('--', filePath);
 

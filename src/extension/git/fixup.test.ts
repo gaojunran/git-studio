@@ -64,4 +64,32 @@ describe('WriteCoordinator fixup', () => {
     expect(git('rev-list', '--count', 'HEAD')).toBe('3');
     expect(git('show', 'HEAD~1:g.txt')).toContain('staged');
   });
+  it('drops one file from a commit through the rebase todo', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gitstudio-dropfile-'));
+    dirs.push(dir);
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+    git('init', '-q');
+    git('config', 'user.email', 'a@example.com');
+    git('config', 'user.name', 'A');
+    writeFileSync(join(dir, 'f.txt'), 'one\n');
+    writeFileSync(join(dir, 'g.txt'), 'one\n');
+    git('add', '.');
+    git('commit', '-qm', 'A');
+    writeFileSync(join(dir, 'f.txt'), 'two\n');
+    writeFileSync(join(dir, 'h.txt'), 'new\n');
+    git('add', '.');
+    git('commit', '-qm', 'B');
+    const b = git('rev-parse', 'HEAD');
+
+    const runner = new GitRunner('git');
+    const writes = new WriteCoordinator(runner);
+    const plan = await buildRebasePlan(runner, dir, git('rev-parse', 'HEAD~1'));
+    const item = plan.items.find((candidate) => candidate.hash === b);
+    item!.dropFile = 'f.txt';
+
+    await writes.rebase(dir, plan, git('rev-parse', 'HEAD'));
+
+    expect(git('show', 'HEAD:f.txt')).toBe('one');
+    expect(git('show', 'HEAD:h.txt')).toBe('new');
+  });
 });

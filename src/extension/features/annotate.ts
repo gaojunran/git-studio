@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { loadBlame, type BlameLine } from '../git/blame';
 import type { RepoHandle } from '../host/repoService';
 import type { Services } from '../host/services';
@@ -34,6 +35,18 @@ function renderTemplate(template: string, line: BlameLine): string {
     .replaceAll('${authorDateAgo}', ago(line.authorTime))
     .replaceAll('${summary}', line.summary)
     .replaceAll('${shortHash}', line.hash.slice(0, 7));
+}
+
+function refOf(uri: vscode.Uri): string | undefined {
+  if (uri.scheme !== 'git') {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(uri.query) as { ref?: string };
+    return parsed.ref;
+  } catch {
+    return undefined;
+  }
 }
 
 export class AnnotateController implements vscode.Disposable {
@@ -104,13 +117,18 @@ export class AnnotateController implements vscode.Disposable {
 
   async refresh(editor: vscode.TextEditor, force = false): Promise<void> {
     const document = editor.document;
-    if (!this.isEnabled(document) || document.uri.scheme !== 'file') {
+    const ref = refOf(document.uri);
+    if (!this.isEnabled(document) || (document.uri.scheme !== 'file' && !ref)) {
       this.hide(document.uri);
       return;
     }
 
     await this.services.repoService.ensureActive();
-    const repo = this.services.repoService.forUri(document.uri);
+    const repo =
+      this.services.repoService.forUri(document.uri) ??
+      this.services.repoService
+        .list()
+        .find((candidate) => document.uri.fsPath === candidate.root || document.uri.fsPath.startsWith(`${candidate.root}${path.sep}`));
     if (!repo) {
       this.hide(document.uri);
       return;
@@ -132,9 +150,9 @@ export class AnnotateController implements vscode.Disposable {
     let key: string;
     try {
       const stat = await vscode.workspace.fs.stat(document.uri);
-      key = `${relative}:${stat.mtime}:${stat.size}:${document.version}`;
+      key = `${relative}:${ref ?? 'worktree'}:${stat.mtime}:${stat.size}:${document.version}`;
     } catch {
-      key = `${relative}:${document.version}`;
+      key = `${relative}:${ref ?? 'worktree'}:${document.version}`;
     }
 
     const current = this.applied.get(document.uri.toString());
@@ -142,7 +160,7 @@ export class AnnotateController implements vscode.Disposable {
       return;
     }
 
-    const lines = await this.blame(repo, relative, key);
+    const lines = await this.blame(repo, relative, key, ref);
     if (!lines) {
       return;
     }
@@ -187,8 +205,8 @@ export class AnnotateController implements vscode.Disposable {
     }
   }
 
-  private async blame(repo: RepoHandle, relative: string, key: string): Promise<BlameLine[] | undefined> {
-    const cached = this.cache.get(`${repo.root}:${relative}`);
+  private async blame(repo: RepoHandle, relative: string, key: string, ref?: string): Promise<BlameLine[] | undefined> {
+    const cached = this.cache.get(`${repo.root}:${relative}:${ref ?? ''}`);
     if (cached?.key === key) {
       return cached.lines;
     }
@@ -202,9 +220,9 @@ export class AnnotateController implements vscode.Disposable {
         this.services.runner,
         repo.root,
         relative,
-        { ignoreWhitespace, detectMoves: true, detectCopies, ignoreRevsFile }
+        { ignoreWhitespace, detectMoves: true, detectCopies, ignoreRevsFile, ref }
       );
-      this.cache.set(`${repo.root}:${relative}`, { key, lines });
+      this.cache.set(`${repo.root}:${relative}:${ref ?? ''}`, { key, lines });
       if (this.cache.size > CACHE_LIMIT) {
         const oldest = this.cache.keys().next().value;
         if (oldest) {

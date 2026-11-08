@@ -280,6 +280,7 @@ export function App() {
       collapseLinear: false,
       since: '',
       until: '',
+      lineRange: undefined,
       order: 'date'
     });
   };
