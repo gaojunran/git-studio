@@ -384,6 +384,9 @@ export function App() {
               before
             })
           }
+          onGetFileFromRevision={(file) =>
+            selected && post({ type: 'getFileFromRevision', hash: selected, path: file.path })
+          }
           onOpenFileHistory={(filePath) => selected && post({ type: 'openFileHistory', path: filePath, hash: selected })}
           onOpenFileAtRevision={(filePath) => selected && post({ type: 'openFileAtRevision', hash: selected, path: filePath })}
           onOpenChanges={() => selected && post({ type: 'openCommitChanges', hash: selected })}

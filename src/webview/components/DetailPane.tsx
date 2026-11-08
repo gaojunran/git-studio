@@ -15,6 +15,7 @@ interface Props {
   onSelectParentIndex: (index: number) => void;
   onOpenFileDiff: (file: FileChange) => void;
   onOpenFileWithLocal: (file: FileChange, before: boolean) => void;
+  onGetFileFromRevision: (file: FileChange) => void;
   onOpenFileHistory: (filePath: string) => void;
   onOpenFileAtRevision: (filePath: string) => void;
   onOpenChanges: () => void;
@@ -176,17 +177,19 @@ export function DetailPane(props: Props) {
         </button>
       </div>
 
-      <div className="detail__subject">{renderHashes(subject, 'subject', props.onOpenCommit)}</div>
-      {body && (
-        <div className={`detail__body ${expanded ? 'detail__body--expanded' : ''}`}>
-          <div className="detail__body-text">{renderHashes(body, 'body', props.onOpenCommit)}</div>
-          {!expanded && body.length > 400 && (
-            <button className="btn btn--link" onClick={() => setExpanded(true)}>
-              Show more
-            </button>
-          )}
-        </div>
-      )}
+      <div className="detail__message">
+        <div className="detail__subject">{renderHashes(subject, 'subject', props.onOpenCommit)}</div>
+        {body && (
+          <div className={`detail__body ${expanded ? 'detail__body--expanded' : ''}`}>
+            <div className="detail__body-text">{renderHashes(body, 'body', props.onOpenCommit)}</div>
+            {!expanded && body.length > 160 && (
+              <button className="btn btn--link detail__more" onClick={() => setExpanded(true)}>
+                Show more
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <dl className="meta">
         <dt>Author</dt>
@@ -311,6 +314,16 @@ export function DetailPane(props: Props) {
                 )}
               </span>
               <span className="file__actions">
+                <button
+                  className="btn btn--icon btn--tiny"
+                  title="Get this file from this revision"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onGetFileFromRevision(file);
+                  }}
+                >
+                  ⤓
+                </button>
                 <button
                   className="btn btn--icon btn--tiny"
                   title="Copy path"

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.1
+
+- Detail pane spacing: grouped message, metadata, linked items, files and footer with consistent
+  padding, wider label column, wrapping refs, taller file rows and a fixed footer.
+- Long commit bodies always offer `Show more` when the preview is clipped.
+- Each changed file can be restored from the selected revision (`Get this file from this revision`),
+  behind a confirmation and the write coordinator.
+
 ## 0.18.0
 
 - A **Collapse** toggle hides the interior commits of linear side branches, keeping merge points and

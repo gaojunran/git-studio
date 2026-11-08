@@ -23,7 +23,7 @@ place to learn and one source of truth for repository state.
   timestamps, GPG signature, refs pointing at the commit, changed files with per-file stats.
   `←` / `→` jump to the parent or child commit, and hashes in the message are links.
 - Per-file actions: diff, compare with working tree, compare the parent with working tree, file
-  history, open at this revision and copy path.
+  history, open at this revision, copy path, and restore the file from the selected revision.
 - Merge commits: switch the diff base between parent 1 and parent 2.
 - Open a commit as a native multi-file diff; compare any two commits.
 - Clicking a file in the detail pane opens its diff beside the history panel as a preview tab, so the

@@ -110,6 +110,13 @@ export class WriteCoordinator {
     });
   }
 
+  async restoreFile(cwd: string, hash: string, filePath: string, expectedHead: string | undefined): Promise<void> {
+    await this.run(cwd, expectedHead, async () => {
+      const oid = await resolveCommit(this.runner, cwd, hash);
+      await this.runner.run(['checkout', oid, '--', filePath], cwd);
+    });
+  }
+
   async abort(cwd: string): Promise<void> {
     await this.exclusive(async () => {
       const operation = await detectOperation(this.runner, cwd);

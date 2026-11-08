@@ -273,6 +273,9 @@ export class HistoryPanel {
         case 'openFileWithLocal':
           await this.openFileWithLocal(message.hash, message.path, message.oldPath, message.status, message.before === true);
           break;
+        case 'getFileFromRevision':
+          await this.getFileFromRevision(message.hash, message.path);
+          break;
         case 'openCommitChanges':
           await this.openCommitChanges(message.hash);
           break;
@@ -629,6 +632,25 @@ export class HistoryPanel {
       `${path.basename(filePath)} (${label} ↔ Working Tree)`,
       { viewColumn: vscode.ViewColumn.Beside, preview: true }
     );
+  }
+
+  private async getFileFromRevision(hash: string, filePath: string): Promise<void> {
+    const answer = await vscode.window.showWarningMessage(
+      `Replace the working tree and index copy of ${filePath} with its version at ${shortHash(hash)}?`,
+      { modal: true },
+      'Replace'
+    );
+    if (answer !== 'Replace') {
+      return;
+    }
+    const head = await headOid(this.services.runner, this.repo.root);
+    try {
+      await this.services.writes.restoreFile(this.repo.root, hash, filePath, head);
+      await this.afterWrite();
+      void vscode.window.showInformationMessage(`Git Studio: restored ${filePath} from ${shortHash(hash)}.`);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Git Studio: ${errorText(error)}`);
+    }
   }
 
   private async openCommitChanges(hash: string): Promise<void> {
