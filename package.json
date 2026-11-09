@@ -3,7 +3,7 @@
   "displayName": "Git Studio",
   "description": "IntelliJ-style Git history for VS Code: multi-ref commit graph, deep history search, file history and full-file blame.",
   "version": "0.23.3",
-  "publisher": "local",
+  "publisher": "gaojunran",
   "license": "MIT",
   "engines": {
     "vscode": "^1.95.0"
@@ -17,7 +17,12 @@
     "history",
     "graph",
     "blame",
-    "log"
+    "diff",
+    "reflog",
+    "worktree",
+    "stash",
+    "issues",
+    "pull-requests"
   ],
   "main": "./dist/extension.js",
   "extensionKind": [
@@ -646,5 +651,13 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.1.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gaojunran/git-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gaojunran/git-studio/issues"
+  },
+  "homepage": "https://github.com/gaojunran/git-studio#readme"
 }
