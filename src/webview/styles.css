@@ -500,7 +500,7 @@ select.input {
   --detail-space: 10px;
 
   flex: none;
-  width: 380px;
+  width: clamp(420px, 42%, 620px);
   border-left: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editor-background);
   display: flex;
@@ -856,7 +856,8 @@ select.input {
 
 .detail__footer {
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 32px;
   gap: 8px;
   padding: 10px var(--detail-pad-x);
   border-top: 1px solid var(--vscode-panel-border);
@@ -864,11 +865,12 @@ select.input {
 }
 
 .detail__footer .btn {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   height: 26px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .btn--actions {
@@ -921,7 +923,7 @@ select.input {
   }
 
   .detail {
-    width: auto;
+    width: 100%;
     height: 45%;
     border-left: none;
     border-top: 1px solid var(--vscode-panel-border);
@@ -1584,7 +1586,7 @@ select.input {
 
 @media (max-width: 1200px) {
   .detail {
-    width: 340px;
+    width: clamp(380px, 40%, 520px);
   }
 
   .row__author {
@@ -1622,5 +1624,13 @@ select.input {
 
   .branches__scroll {
     max-height: 120px;
+  }
+}
+
+/* Keep the stacked detail pane full width: this must come after the
+   max-width: 1200px rule, which would otherwise re-apply a fixed width. */
+@media (max-width: 760px) {
+  .detail {
+    width: 100%;
   }
 }

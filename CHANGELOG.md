@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.3
+
+- Detail pane width is responsive: 420–620px on wide windows, 40% on medium windows, and full width
+  when the layout stacks below 760px. A later `max-width: 1200px` rule was overriding the stacked
+  full-width rule, which left the pane at 380px with empty space beside it.
+- The detail footer uses a grid so `Open Changes` no longer truncates to `Open Chang...`.
+
 ## 0.23.2
 
 - Detail pane keeps the footer visible at the bottom; the message, metadata, linked items and files
