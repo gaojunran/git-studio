@@ -29,7 +29,7 @@ history. Git Studio adds one focused History surface and a few native entry poin
 
 ## Quick start
 
-1. Install **Git Studio** from the Marketplace.
+1. Install **Git Studio History** from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=gaojunran.git-studio-history).
 2. Open the command palette and run **Git Studio: Open History** (`⌘/Ctrl+Alt+H`).
 3. Click a commit to inspect it; click a changed file to open its native diff.
 4. Right-click a commit for branch, tag, diff, copy and rewrite actions.

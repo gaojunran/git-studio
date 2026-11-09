@@ -17,3 +17,6 @@ vitest.config.mts
 .cortexkit/**
 esbuild.mjs
 package-lock.json
+
+.github/**
+test/**
